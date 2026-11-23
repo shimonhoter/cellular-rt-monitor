@@ -1,6 +1,7 @@
-// Update to version 4.1.1
+// Update to version 4.1.2
 package com.cellular.rtmonitor
 
+// [START: Imports]
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -14,7 +15,9 @@ import androidx.annotation.RequiresApi
 import rikka.shizuku.Shizuku
 import java.io.BufferedReader
 import java.io.InputStreamReader
+// [END: Imports]
 
+// [START: RealModemControllerClass]
 class RealModemController(private val context: Context) {
 
     companion object {
@@ -24,6 +27,7 @@ class RealModemController(private val context: Context) {
     private val telephonyManager =
         context.getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
 
+    // [START: ShizukuHelpers]
     private fun isShizukuAvailable(): Boolean {
         return try {
             val binderOk = Shizuku.pingBinder()
@@ -67,7 +71,9 @@ class RealModemController(private val context: Context) {
             false
         }
     }
+    // [END: ShizukuHelpers]
 
+    // [START: NetworkTypeLock]
     @RequiresApi(Build.VERSION_CODES.S)
     fun setRealNetworkTypeLock(ratMode: String) {
         val networkTypeBitmask: Long = when (ratMode) {
@@ -87,7 +93,6 @@ class RealModemController(private val context: Context) {
                      TelephonyManager.NETWORK_TYPE_BITMASK_GSM)
         }
 
-        // Legacy RIL preferred_network_mode integer constants for AOSP / MIUI / OneUI
         val legacyNetworkMode: Int = when (ratMode) {
             "5G" -> 23   // NR_ONLY
             "4G" -> 11   // LTE_ONLY
@@ -138,7 +143,9 @@ class RealModemController(private val context: Context) {
             openDeviceNetworkSettings()
         }
     }
+    // [END: NetworkTypeLock]
 
+    // [START: AirplaneAndSettings]
     fun setRealAirplaneMode(enable: Boolean) {
         val state = if (enable) 1 else 0
         val boolStr = if (enable) "enable" else "disable"
@@ -175,4 +182,6 @@ class RealModemController(private val context: Context) {
         }
         context.startActivity(intent)
     }
+    // [END: AirplaneAndSettings]
 }
+// [END: RealModemControllerClass]
