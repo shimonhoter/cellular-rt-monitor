@@ -716,9 +716,12 @@
                 document.getElementById('val-rsrq').textContent = Number(state.rf.rsrq).toFixed(1);
                 document.getElementById('bar-rsrq').style.width = Math.min(100, Math.max(0, ((state.rf.rsrq + 20) / 17) * 100)) + '%';
             }
-            if (state.rf.sinr !== null) {
+            if (state.rf.sinr !== null && state.rf.sinr !== undefined && !Number.isNaN(Number(state.rf.sinr))) {
                 document.getElementById('val-sinr').textContent = Number(state.rf.sinr).toFixed(1);
                 document.getElementById('bar-sinr').style.width = Math.min(100, Math.max(0, ((state.rf.sinr + 10) / 40) * 100)) + '%';
+            } else {
+                document.getElementById('val-sinr').textContent = '--';
+                document.getElementById('bar-sinr').style.width = '0%';
             }
             if (state.rf.rssi !== null) {
                 document.getElementById('val-rssi').textContent = Number(state.rf.rssi).toFixed(1);
