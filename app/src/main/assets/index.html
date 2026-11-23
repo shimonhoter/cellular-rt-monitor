@@ -1181,5 +1181,143 @@ ${sampledRows.join('\n')}`;
 
         requestAnimationFrame(renderLiveChart);
     </script>
+
+<style>
+/* RT_PERM_AXES_V4_1_9 */
+.rt-axes-shell {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.rt-axes-main {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.rt-y-axis {
+  width: 34px;
+  shrink: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 4px 3px 4px 2px;
+  font-family: monospace;
+  font-size: 9px;
+  color: #94a3b8;
+  background: rgba(2, 6, 23, 0.55);
+  border-right: 1px solid rgba(148, 163, 184, 0.2);
+  user-select: none;
+  pointer-events: none;
+  direction: ltr;
+}
+.rt-plot-box {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.rt-x-axis {
+  height: 15px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 6px 0 38px;
+  font-family: monospace;
+  font-size: 9px;
+  color: #94a3b8;
+  background: rgba(2, 6, 23, 0.55);
+  border-top: 1px solid rgba(148, 163, 184, 0.2);
+  user-select: none;
+  pointer-events: none;
+  direction: ltr;
+}
+.rt-live-pill {
+  position: absolute;
+  top: 5px;
+  left: 6px;
+  z-index: 15;
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  background: rgba(2, 6, 23, 0.88);
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  border-radius: 5px;
+  padding: 2px 7px;
+  font-family: monospace;
+  font-size: 10px;
+  font-weight: 700;
+  pointer-events: none;
+  direction: ltr;
+}
+</style>
+<script>
+(function() {
+  if (window.__rtPermAxesV419) return;
+  window.__rtPermAxesV419 = true;
+
+  function mountPermanentAxes() {
+    const canvas = document.getElementById("rfChart");
+    if (!canvas || canvas.dataset.rtPermMounted === "1") return;
+    const parent = canvas.parentElement;
+    if (!parent) return;
+
+    canvas.dataset.rtPermMounted = "1";
+    const shell = document.createElement("div");
+    shell.className = "rt-axes-shell";
+
+    const mainRow = document.createElement("div");
+    mainRow.className = "rt-axes-main";
+
+    const yAxis = document.createElement("div");
+    yAxis.className = "rt-y-axis";
+    yAxis.innerHTML = '<span>-50</span><span>-75</span><span>-100</span><span>-125</span>';
+
+    const plotBox = document.createElement("div");
+    plotBox.className = "rt-plot-box";
+
+    const livePill = document.createElement("div");
+    livePill.className = "rt-live-pill";
+    livePill.innerHTML = '<span style="color:#34d399" id="rt-pill-rsrp">RSRP: --</span><span style="color:#fbbf24" id="rt-pill-rssi">RSSI: --</span><span style="color:#818cf8" id="rt-pill-sinr">SINR: --</span>';
+
+    const xAxis = document.createElement("div");
+    xAxis.className = "rt-x-axis";
+    xAxis.innerHTML = '<span>-60s</span><span>-40s</span><span>-20s</span><span>now</span>';
+
+    parent.insertBefore(shell, canvas);
+    plotBox.appendChild(canvas);
+    plotBox.appendChild(livePill);
+    mainRow.appendChild(yAxis);
+    mainRow.appendChild(plotBox);
+    shell.appendChild(mainRow);
+    shell.appendChild(xAxis);
+  }
+
+  function syncLiveValues() {
+    mountPermanentAxes();
+    try {
+      const rf = (typeof state !== "undefined" && state && state.rf) ? state.rf : null;
+      const rsrpEl = document.getElementById("rt-pill-rsrp");
+      const rssiEl = document.getElementById("rt-pill-rssi");
+      const sinrEl = document.getElementById("rt-pill-sinr");
+      if (rsrpEl && rf) {
+        rsrpEl.textContent = "RSRP: " + (typeof rf.rsrp === "number" && !Number.isNaN(rf.rsrp) ? rf.rsrp.toFixed(1) : "--");
+      }
+      if (rssiEl && rf) {
+        rssiEl.textContent = "RSSI: " + (typeof rf.rssi === "number" && !Number.isNaN(rf.rssi) ? rf.rssi.toFixed(1) : "--");
+      }
+      if (sinrEl && rf) {
+        sinrEl.textContent = "SINR: " + (typeof rf.sinr === "number" && !Number.isNaN(rf.sinr) ? rf.sinr.toFixed(1) : "--");
+      }
+    } catch (e) {}
+  }
+
+  document.addEventListener("DOMContentLoaded", syncLiveValues);
+  setInterval(syncLiveValues, 500);
+})();
+</script>
+
 </body>
 </html>
