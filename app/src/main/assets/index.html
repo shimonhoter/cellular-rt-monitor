@@ -1283,7 +1283,7 @@ ${sampledRows.join('\n')}`;
 
     const livePill = document.createElement("div");
     livePill.className = "rt-live-pill";
-    livePill.innerHTML = '<span style="color:#34d399" id="rt-pill-rsrp">RSRP: --</span><span style="color:#fbbf24" id="rt-pill-rssi">RSSI: --</span><span style="color:#818cf8" id="rt-pill-sinr">SINR: --</span>';
+    livePill.innerHTML = '<span style="color:#34d399" id="rt-pill-rsrp">RSRP: --</span><span style="color:#38bdf8" id="rt-pill-rsrq">RSRQ: --</span><span style="color:#fbbf24" id="rt-pill-rssi">RSSI: --</span><span style="color:#818cf8" id="rt-pill-sinr">SINR: --</span>';
 
     const xAxis = document.createElement("div");
     xAxis.className = "rt-x-axis";
@@ -1303,10 +1303,14 @@ ${sampledRows.join('\n')}`;
     try {
       const rf = (typeof state !== "undefined" && state && state.rf) ? state.rf : null;
       const rsrpEl = document.getElementById("rt-pill-rsrp");
+      const rsrqEl = document.getElementById("rt-pill-rsrq");
       const rssiEl = document.getElementById("rt-pill-rssi");
       const sinrEl = document.getElementById("rt-pill-sinr");
       if (rsrpEl && rf) {
         rsrpEl.textContent = "RSRP: " + (typeof rf.rsrp === "number" && !Number.isNaN(rf.rsrp) ? rf.rsrp.toFixed(1) : "--");
+      }
+      if (rsrqEl && rf) {
+        rsrqEl.textContent = "RSRQ: " + (typeof rf.rsrq === "number" && !Number.isNaN(rf.rsrq) ? rf.rsrq.toFixed(1) : "--");
       }
       if (rssiEl && rf) {
         rssiEl.textContent = "RSSI: " + (typeof rf.rssi === "number" && !Number.isNaN(rf.rssi) ? rf.rssi.toFixed(1) : "--");
@@ -1321,6 +1325,32 @@ ${sampledRows.join('\n')}`;
   setInterval(syncLiveValues, 500);
 })();
 </script>
+
+
+// [RT_AIRPLANE_MODE_GUARD]
+(function() {
+  const origHandler = window.onRealModemData;
+  window.onRealModemData = function(data) {
+    try {
+      if (data && (data.airplaneMode === true || data.servingCell === null)) {
+        if (typeof state !== "undefined" && state && state.rf) {
+          state.rf.rsrp = null;
+          state.rf.rsrq = null;
+          state.rf.rssi = null;
+          state.rf.sinr = null;
+        }
+        if (typeof state !== "undefined" && state && state.servingCell) {
+          state.servingCell.tech = "AIRPLANE";
+          state.servingCell.band = "---";
+          state.servingCell.pci = "---";
+        }
+      }
+    } catch (e) {}
+    if (typeof origHandler === "function") {
+      return origHandler(data);
+    }
+  };
+})();
 
 </body>
 </html>
