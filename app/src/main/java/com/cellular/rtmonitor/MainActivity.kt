@@ -1,3 +1,4 @@
+// Update to version 4.1.4
 package com.cellular.rtmonitor
 
 import android.Manifest
@@ -61,6 +62,7 @@ class MainActivity : AppCompatActivity() {
         if (fineLocationGranted && phoneStateGranted) {
             startRealModemStream()
         }
+        startBackgroundMonitorServiceSafely()
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -108,11 +110,34 @@ class MainActivity : AppCompatActivity() {
 
         checkAndRequestPermissions()
         requestShizukuPermissionIfNeeded()
+        requestNotificationPermissionIfNeeded()
+        startBackgroundMonitorServiceSafely()
     }
 
     override fun onResume() {
         super.onResume()
         updateShizukuUiState()
+        startBackgroundMonitorServiceSafely()
+    }
+
+    private fun requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val granted = ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+            if (!granted) {
+                permissionLauncher.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
+            }
+        }
+    }
+
+    private fun startBackgroundMonitorServiceSafely() {
+        try {
+            BackgroundMonitorService.startService(this)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     private fun isShizukuReady(): Boolean {
@@ -217,7 +242,6 @@ class MainActivity : AppCompatActivity() {
         val missing = needed.filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
-
         if (missing.isEmpty()) {
             startRealModemStream()
         } else {
