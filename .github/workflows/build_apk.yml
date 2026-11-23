@@ -14,11 +14,10 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Extract ZIP
-    run: |
-    ZIP_FILE=$(ls *.zip | head -n 1)
-    echo "Extracting $ZIP_FILE"
-    unzip -o "$ZIP_FILE"
-
+        run: |
+          ZIP_FILE=$(ls *.zip | head -n 1)
+          echo "Extracting $ZIP_FILE"
+          unzip -o "$ZIP_FILE"
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
