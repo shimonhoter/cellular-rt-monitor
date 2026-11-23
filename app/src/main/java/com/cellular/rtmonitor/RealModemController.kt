@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.Process as AndroidProcess
 import android.provider.Settings
 import android.telephony.SubscriptionManager
 import android.telephony.TelephonyManager
@@ -69,14 +70,10 @@ class RealModemController(private val context: Context) {
         }
 
         val subId = SubscriptionManager.getDefaultDataSubscriptionId()
+        val userId = AndroidProcess.myUserHandle().hashCode()
 
         if (isShizukuAvailable()) {
-            // Try modern cmd phone with subId, plus direct global settings fallback via Shizuku shell
-            val shellCmd = buildString {
-                if (subId != SubscriptionManager.INVALID_SUBSCRIPTION_ID) {
-                    append("cmd phone set-allowed-network-types-for-users -s $subId $networkTypeBitmask || ")
-                }
-                append("cmd phone set-allowed-network-types-for-users $networkTypeBitmask; ")
+            val applySettingsCmd = buildString {
                 append("settings put global preferred_network_mode $legacyNetworkMode; ")
                 if (subId != SubscriptionManager.INVALID_SUBSCRIPTION_ID) {
                     append("settings put global preferred_network_mode$subId $legacyNetworkMode; ")
@@ -84,7 +81,16 @@ class RealModemController(private val context: Context) {
                 append("settings put global preferred_network_mode1 $legacyNetworkMode")
             }
 
-            if (runShizukuShellCommand(shellCmd)) {
+            val cmdPhoneAttempt = if (subId != SubscriptionManager.INVALID_SUBSCRIPTION_ID) {
+                "(cmd phone set-allowed-network-types-for-users $userId $networkTypeBitmask || cmd phone set-allowed-network-types-for-users 0 $networkTypeBitmask || cmd phone set-allowed-network-types-for-users $subId $networkTypeBitmask)"
+            } else {
+                "(cmd phone set-allowed-network-types-for-users $userId $networkTypeBitmask || cmd phone set-allowed-network-types-for-users 0 $networkTypeBitmask)"
+            }
+
+            val phoneOk = runShizukuShellCommand(cmdPhoneAttempt)
+            runShizukuShellCommand(applySettingsCmd)
+
+            if (phoneOk) {
                 return
             }
         }
