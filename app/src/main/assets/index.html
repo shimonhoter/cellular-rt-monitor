@@ -1,0 +1,1185 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Cellular RT Monitor v4.1 - Pro Telemetry & AI Log Analyzer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700;900&family=JetBrains+Mono:wght@400;600;700&display=swap');
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            font-family: 'Heebo', sans-serif;
+            background-color: #070b14;
+            color: #e2e8f0;
+            overflow-x: hidden;
+        }
+        .mono {
+            font-family: 'JetBrains Mono', monospace;
+            direction: ltr;
+            display: inline-block;
+        }
+        .ltr-box {
+            direction: ltr;
+            text-align: left;
+        }
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
+        @keyframes pulse-fast { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+        .live-dot { animation: pulse-fast 1.2s infinite; }
+    </style>
+</head>
+<body class="h-screen flex flex-col overflow-hidden select-none">
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="fixed top-12 left-2 z-50 flex flex-col gap-1.5 max-w-xs w-full pointer-events-none"></div>
+
+    <!-- Compact Top Header & Navigation Tabs -->
+    <header class="bg-slate-900 border-b border-slate-800 px-2.5 py-1.5 shrink-0 z-40">
+        <div class="flex items-center justify-between gap-1.5">
+            <!-- Title & HW Status -->
+            <div class="flex items-center gap-1.5">
+                <span class="text-cyan-400 font-black text-sm tracking-tight">RT-MON <span class="text-[10px] text-slate-400 font-normal">v4.1</span></span>
+                <span id="status-badge" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                    <span id="status-dot" class="w-1.5 h-1.5 rounded-full bg-amber-400 live-dot"></span>
+                    <span id="status-text">WAITING HW</span>
+                </span>
+            </div>
+
+            <!-- Shizuku, 4636 & Web Help Center Buttons -->
+            <div class="flex items-center gap-1">
+                <button onclick="openShizukuModal()" id="btn-shizuku-status" class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                    ⚡ Shizuku
+                </button>
+                <button onclick="openRealDeviceSettings()" class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700">
+                    📱 4636
+                </button>
+                <button onclick="openHelpCenter()" class="px-2 py-0.5 rounded text-[10px] font-bold bg-cyan-600/30 hover:bg-cyan-600/50 text-cyan-200 border border-cyan-500/50 flex items-center gap-0.5" title="מרכז עזרה ומדריך הפעלה">
+                    <span>❓</span> עזרה
+                </button>
+            </div>
+        </div>
+
+        <!-- 4 Main Navigation Tabs -->
+        <nav class="grid grid-cols-4 gap-1 mt-1.5 bg-slate-950 p-0.5 rounded-lg border border-slate-800 text-[11px] font-bold">
+            <button onclick="switchTab('live')" id="tab-btn-live" class="tab-btn py-1 rounded-md bg-cyan-600 text-white transition">📡 נתונים חיים</button>
+            <button onclick="switchTab('logs')" id="tab-btn-logs" class="tab-btn py-1 rounded-md text-slate-400 hover:text-white transition">📜 לוג וייצוא</button>
+            <button onclick="switchTab('analytics')" id="tab-btn-analytics" class="tab-btn py-1 rounded-md text-slate-400 hover:text-white transition">📊 ניתוח וגרפים</button>
+            <button onclick="switchTab('ai')" id="tab-btn-ai" class="tab-btn py-1 rounded-md text-slate-400 hover:text-white transition">🤖 ניתוח AI</button>
+        </nav>
+    </header>
+
+    <!-- ===================================================================== -->
+    <!-- TAB 1: SINGLE-SCREEN NO-SCROLL LIVE TELEMETRY                         -->
+    <!-- ===================================================================== -->
+    <main id="view-live" class="tab-view flex-1 flex flex-col justify-between p-2 gap-1.5 overflow-hidden">
+
+        <!-- Row 1: RAT Lock & Airplane Mode Control Strip -->
+        <div class="flex items-center justify-between gap-1.5 bg-slate-900 border border-slate-800 rounded-lg p-1.5 shrink-0">
+            <div class="flex items-center gap-0.5 text-[11px]">
+                <button onclick="setRatMode('AUTO')" id="rat-AUTO" class="rat-btn px-2 py-1 rounded font-bold bg-cyan-600 text-white">Auto</button>
+                <button onclick="setRatMode('5G')" id="rat-5G" class="rat-btn px-2 py-1 rounded font-medium text-slate-300">5G</button>
+                <button onclick="setRatMode('4G')" id="rat-4G" class="rat-btn px-2 py-1 rounded font-medium text-slate-300">4G</button>
+                <button onclick="setRatMode('3G')" id="rat-3G" class="rat-btn px-2 py-1 rounded font-medium text-slate-300">3G</button>
+                <button onclick="setRatMode('2G')" id="rat-2G" class="rat-btn px-2 py-1 rounded font-medium text-slate-300">2G</button>
+            </div>
+            <button onclick="toggleAirplaneMode()" id="btn-airplane" class="px-2.5 py-1 rounded text-[11px] font-bold bg-slate-800 text-amber-300 border border-slate-700">
+                ✈️ <span id="airplane-text">טיסה: כבוי</span>
+            </button>
+        </div>
+
+        <!-- Row 2: Serving Cell Compact Identity Grid -->
+        <section class="bg-slate-900 border border-slate-800 rounded-lg p-2 shrink-0">
+            <div class="flex items-center justify-between mb-1">
+                <div class="flex items-center gap-1.5">
+                    <span id="cell-tech" class="px-1.5 py-0.5 rounded text-[11px] font-black bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 mono">---</span>
+                    <span id="cell-band" class="px-1.5 py-0.5 rounded text-[11px] font-bold bg-slate-800 text-slate-200 mono">---</span>
+                </div>
+                <span id="cell-plmn" class="text-[11px] font-bold text-slate-300 mono">ממתין למודם...</span>
+            </div>
+
+            <div class="grid grid-cols-4 gap-1 text-[10px]">
+                <div class="bg-slate-950 px-1.5 py-1 rounded border border-slate-800/80">
+                    <div id="lbl-pci" class="text-slate-500">PCI / PSC</div>
+                    <div id="cell-pci" class="font-bold text-cyan-400 mono text-xs">---</div>
+                </div>
+                <div class="bg-slate-950 px-1.5 py-1 rounded border border-slate-800/80">
+                    <div id="lbl-gnb" class="text-slate-500">eNB / gNB</div>
+                    <div id="cell-gnb" class="font-bold text-white mono text-xs">---</div>
+                </div>
+                <div class="bg-slate-950 px-1.5 py-1 rounded border border-slate-800/80">
+                    <div id="lbl-arfcn" class="text-slate-500">ARFCN</div>
+                    <div id="cell-arfcn" class="font-bold text-white mono text-xs">---</div>
+                </div>
+                <div class="bg-slate-950 px-1.5 py-1 rounded border border-slate-800/80">
+                    <div id="lbl-tac" class="text-slate-500">TAC / LAC</div>
+                    <div id="cell-tac" class="font-bold text-slate-200 mono text-xs">---</div>
+                </div>
+                <div class="bg-slate-950 px-1.5 py-1 rounded border border-slate-800/80">
+                    <div class="text-slate-500">BW / Freq</div>
+                    <div id="cell-bw" class="font-bold text-slate-200 mono text-xs">---</div>
+                </div>
+                <div class="bg-slate-950 px-1.5 py-1 rounded border border-slate-800/80">
+                    <div class="text-slate-500">TA (מרחק)</div>
+                    <div id="cell-ta" class="font-bold text-slate-200 mono text-xs">---</div>
+                </div>
+                <div class="bg-slate-950 px-1.5 py-1 rounded border border-slate-800/80">
+                    <div class="text-slate-500">דגימות</div>
+                    <div id="sample-count" class="font-bold text-emerald-400 mono text-xs">0</div>
+                </div>
+                <div class="bg-slate-950 px-1.5 py-1 rounded border border-slate-800/80">
+                    <div class="text-slate-500">מעברי תא</div>
+                    <div id="ho-count" class="font-bold text-amber-400 mono text-xs">0</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Row 3: 4 Core RF KPIs -->
+        <section class="grid grid-cols-4 gap-1.5 shrink-0">
+            <div class="bg-slate-900 border border-slate-800 rounded-lg p-1.5">
+                <div class="flex justify-between items-center text-[10px]">
+                    <span id="kpi1-name" class="font-bold text-slate-400">RSRP</span>
+                    <span id="rsrp-badge" class="text-[9px] px-1 rounded bg-slate-800 text-slate-400">--</span>
+                </div>
+                <div class="my-0.5">
+                    <span id="val-rsrp" class="text-base font-black text-emerald-400 mono">---</span>
+                    <span class="text-[9px] text-slate-500">dBm</span>
+                </div>
+                <div class="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
+                    <div id="bar-rsrp" class="bg-emerald-400 h-full" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <div class="bg-slate-900 border border-slate-800 rounded-lg p-1.5">
+                <div class="flex justify-between items-center text-[10px]">
+                    <span id="kpi2-name" class="font-bold text-slate-400">RSRQ</span>
+                    <span id="kpi2-unit" class="text-[9px] text-slate-500">dB</span>
+                </div>
+                <div class="my-0.5">
+                    <span id="val-rsrq" class="text-base font-black text-cyan-400 mono">---</span>
+                </div>
+                <div class="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
+                    <div id="bar-rsrq" class="bg-cyan-400 h-full" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <div class="bg-slate-900 border border-slate-800 rounded-lg p-1.5">
+                <div class="flex justify-between items-center text-[10px]">
+                    <span id="kpi3-name" class="font-bold text-slate-400">SINR</span>
+                    <span class="text-[9px] text-slate-500">dB</span>
+                </div>
+                <div class="my-0.5">
+                    <span id="val-sinr" class="text-base font-black text-indigo-400 mono">---</span>
+                </div>
+                <div class="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
+                    <div id="bar-sinr" class="bg-indigo-400 h-full" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <div class="bg-slate-900 border border-slate-800 rounded-lg p-1.5">
+                <div class="flex justify-between items-center text-[10px]">
+                    <span class="font-bold text-slate-400">RSSI</span>
+                    <span class="text-[9px] text-slate-500">dBm</span>
+                </div>
+                <div class="my-0.5">
+                    <span id="val-rssi" class="text-base font-black text-amber-400 mono">---</span>
+                </div>
+                <div class="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
+                    <div id="bar-rssi" class="bg-amber-400 h-full" style="width: 0%"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Row 4: Live RF Waveform Chart -->
+        <section class="bg-slate-900 border border-slate-800 rounded-lg p-1.5 flex flex-col flex-1 min-h-[85px]">
+            <div class="flex items-center justify-between text-[10px] mb-1 shrink-0">
+                <span class="font-bold text-slate-400">גרף קליטה חי</span>
+                <div class="flex items-center gap-2">
+                    <span class="text-emerald-400">● <span id="legend-rsrp">RSRP</span></span>
+                    <span class="text-amber-400">● RSSI</span>
+                    <span class="text-indigo-400">● SINR</span>
+                </div>
+            </div>
+            <div class="relative flex-1 w-full bg-slate-950 rounded border border-slate-800 overflow-hidden">
+                <canvas id="rfChart" class="w-full h-full block"></canvas>
+            </div>
+        </section>
+
+        <!-- Row 5: Compact Neighbor Cells Table -->
+        <section class="bg-slate-900 border border-slate-800 rounded-lg p-1.5 h-[115px] flex flex-col shrink-0">
+            <div class="flex items-center justify-between text-[10px] mb-1 shrink-0">
+                <span class="font-bold text-slate-300">תאים שכנים (Neighbors)</span>
+                <span id="neighbor-count" class="text-slate-500 mono">0 cells</span>
+            </div>
+            <div class="flex-1 overflow-y-auto">
+                <table class="w-full text-[10px] text-right">
+                    <thead class="text-slate-500 border-b border-slate-800 sticky top-0 bg-slate-900">
+                        <tr>
+                            <th class="py-0.5 px-1">PCI/PSC</th>
+                            <th class="py-0.5 px-1">רשת</th>
+                            <th class="py-0.5 px-1">ARFCN</th>
+                            <th class="py-0.5 px-1">עוצמה</th>
+                            <th class="py-0.5 px-1">הפרש</th>
+                        </tr>
+                    </thead>
+                    <tbody id="neighbors-tbody" class="divide-y divide-slate-800/50 font-mono">
+                        <tr><td colspan="5" class="py-2 text-center text-slate-500">ממתין לנתוני אנטנות מהמכשיר...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <!-- ===================================================================== -->
+    <!-- TAB 2: LIVE LOG STREAM, EXPORT & IMPORT FILE                          -->
+    <!-- ===================================================================== -->
+    <section id="view-logs" class="tab-view hidden flex-1 flex flex-col p-2.5 gap-2 overflow-hidden">
+        <div class="bg-slate-900 border border-slate-800 rounded-lg p-2 flex flex-wrap items-center justify-between gap-2 shrink-0">
+            <div class="flex items-center gap-1.5">
+                <button onclick="exportLogs('csv')" class="px-2.5 py-1.5 rounded bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold">
+                    ⬇ ייצוא CSV
+                </button>
+                <button onclick="exportLogs('json')" class="px-2.5 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold">
+                    ⬇ ייצוא JSON
+                </button>
+            </div>
+            <div class="flex items-center gap-1.5">
+                <label class="cursor-pointer px-2.5 py-1.5 rounded bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 text-xs font-bold">
+                    📂 טען קובץ Log (CSV/JSON)
+                    <input type="file" id="log-file-input" accept=".csv,.json,.txt,.log" onchange="handleFileUpload(event)" class="hidden">
+                </label>
+                <button onclick="clearLogs()" class="px-2 py-1.5 rounded bg-slate-800 text-rose-400 text-xs font-bold">נקה</button>
+            </div>
+        </div>
+
+        <div id="log-source-banner" class="bg-slate-900/80 border border-slate-800 rounded-lg px-2.5 py-1.5 flex items-center justify-between text-xs shrink-0">
+            <span>מקור נתונים פעיל: <strong id="active-dataset-label" class="text-cyan-400">הקלטה חיה מהמכשיר</strong></span>
+            <button id="btn-reset-live" onclick="resetToLiveDataset()" class="hidden px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 text-[11px] font-bold">חזור להקלטה חיה</button>
+        </div>
+
+        <div class="flex items-center gap-1.5 text-xs shrink-0">
+            <button onclick="setLogFilter('ALL')" id="filter-ALL" class="log-filter-btn px-2.5 py-1 rounded bg-cyan-600 text-white font-bold">הכל</button>
+            <button onclick="setLogFilter('HO')" id="filter-HO" class="log-filter-btn px-2.5 py-1 rounded bg-slate-800 text-slate-300">Handover</button>
+            <button onclick="setLogFilter('RF')" id="filter-RF" class="log-filter-btn px-2.5 py-1 rounded bg-slate-800 text-slate-300">דגימות RF</button>
+            <button onclick="setLogFilter('SYS')" id="filter-SYS" class="log-filter-btn px-2.5 py-1 rounded bg-slate-800 text-slate-300">מערכת / מודם</button>
+        </div>
+
+        <div id="log-stream" class="flex-1 bg-slate-950 border border-slate-800 rounded-lg p-2 overflow-y-auto space-y-1.5 text-xs ltr-box font-mono"></div>
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- TAB 3: LOG ANALYTICS, CONCLUSIONS, CHARTS & HISTOGRAMS                -->
+    <!-- ===================================================================== -->
+    <section id="view-analytics" class="tab-view hidden flex-1 flex flex-col p-2.5 gap-2.5 overflow-y-auto">
+        <div class="flex items-center justify-between bg-slate-900 border border-slate-800 rounded-lg p-2.5">
+            <div>
+                <h2 class="text-sm font-bold text-white">ניתוח ביצועי רשת ומודם</h2>
+                <p id="analytics-subtitle" class="text-[11px] text-slate-400">מבוסס על הלוג החי מהמכשיר</p>
+            </div>
+            <button onclick="runLogAnalytics()" class="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold">
+                🔄 רענן ניתוח
+            </button>
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+            <div class="bg-slate-900 border border-slate-800 rounded-lg p-2.5">
+                <div class="text-slate-400 text-[11px]">ממוצע RSRP</div>
+                <div id="stat-avg-rsrp" class="text-lg font-black text-emerald-400 mono">---</div>
+                <div id="stat-minmax-rsrp" class="text-[10px] text-slate-500 mono">Min/Max: --</div>
+            </div>
+            <div class="bg-slate-900 border border-slate-800 rounded-lg p-2.5">
+                <div class="text-slate-400 text-[11px]">ממוצע SINR</div>
+                <div id="stat-avg-sinr" class="text-lg font-black text-indigo-400 mono">---</div>
+                <div id="stat-minmax-sinr" class="text-[10px] text-slate-500 mono">Min/Max: --</div>
+            </div>
+            <div class="bg-slate-900 border border-slate-800 rounded-lg p-2.5">
+                <div class="text-slate-400 text-[11px]">יציבות תאים (HO)</div>
+                <div id="stat-ho-total" class="text-lg font-black text-amber-400 mono">0</div>
+                <div id="stat-unique-cells" class="text-[10px] text-slate-500">תאים ייחודיים: 0</div>
+            </div>
+            <div class="bg-slate-900 border border-slate-800 rounded-lg p-2.5">
+                <div class="text-slate-400 text-[11px]">טכנולוגיה דומיננטית</div>
+                <div id="stat-dom-rat" class="text-lg font-black text-cyan-400 mono">---</div>
+                <div id="stat-total-samples" class="text-[10px] text-slate-500">סה"כ דגימות: 0</div>
+            </div>
+        </div>
+
+        <div class="bg-slate-900 border border-cyan-500/30 rounded-lg p-3">
+            <h3 class="text-xs font-bold text-cyan-400 mb-2">📋 מסקנות אוטומטיות על הרשת והמכשיר:</h3>
+            <ul id="analytics-conclusions" class="space-y-1.5 text-xs text-slate-200 list-disc list-inside">
+                <li>אסוף דגימות או טען קובץ לוג כדי להפיק מסקנות.</li>
+            </ul>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-lg p-3">
+            <h3 class="text-xs font-bold text-slate-300 mb-1">היסטוגרמת התפלגות עוצמת קליטה (RSRP dBm)</h3>
+            <div class="h-44 w-full bg-slate-950 rounded border border-slate-800 p-1">
+                <canvas id="histCanvas" class="w-full h-full block"></canvas>
+            </div>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-lg p-3">
+            <h3 class="text-xs font-bold text-slate-300 mb-1">גרף התפלגות זמן לפי טכנולוגיה ותאים (RAT / PCI)</h3>
+            <div class="h-44 w-full bg-slate-950 rounded border border-slate-800 p-1">
+                <canvas id="ratChartCanvas" class="w-full h-full block"></canvas>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- TAB 4: AI SMART LOG ANALYZER (PROMPT + LOG DATA)                      -->
+    <!-- ===================================================================== -->
+    <section id="view-ai" class="tab-view hidden flex-1 flex flex-col p-2.5 gap-2.5 overflow-y-auto">
+        <div class="bg-slate-900 border border-indigo-500/40 rounded-lg p-3">
+            <h2 class="text-sm font-bold text-white flex items-center gap-1.5 mb-1">
+                <span>🤖</span> ניתוח חכם של הלוג באמצעות AI
+            </h2>
+            <p class="text-xs text-slate-300 leading-relaxed">
+                המערכת תארוז אוטומטית את הנתונים הסטטיסטיים, אירועי ה-Handover ודגימות הקליטה מהלוג הפעיל (<span id="ai-dataset-badge" class="text-cyan-400 font-bold">הלוג החי</span>) יחד עם הפרומפט שתכתוב.
+            </p>
+        </div>
+
+        <div class="flex flex-wrap gap-1.5 text-[11px]">
+            <button onclick="setAiPreset('נתח את איכות הקליטה והיציבות של הרשת בלוג זה. האם יש נפילות קליטה, בעיות SINR או תופעת Ping-Pong במעברי תא?')" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700">
+                🔍 אבחון יציבות ונפילות
+            </button>
+            <button onclick="setAiPreset('בדוק את התפלגות התדרים (Bands) והטכנולוגיות (5G/4G) בלוג. על איזה תדר המכשיר מקבל את הביצועים הטובים ביותר?')" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-slate-700">
+                📶 השוואת תדרים ודורות
+            </button>
+            <button onclick="setAiPreset('האם התנהגות המודם בלוג מעידה על בעיית חומרה/אנטנה במכשיר או על עומס וכיסוי חלש של מפעיל הסלולר?')" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700">
+                🛠️ מכשיר מול רשת
+            </button>
+        </div>
+
+        <div class="flex flex-col gap-1">
+            <label class="text-xs font-bold text-slate-300">הנחיה / שאלה ל-AI:</label>
+            <textarea id="ai-user-prompt" rows="3" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white focus:border-cyan-500 focus:outline-none" placeholder="כתוב כאן מה תרצה שה-AI יבדוק בלוג...">נתח את נתוני הלוג המצורפים, אתר חריגות בעוצמת האות (RSRP/SINR) ובמעברי התאים (Handovers), והמלץ כיצד לשפר את יציבות החיבור.</textarea>
+        </div>
+
+        <details class="bg-slate-900 border border-slate-800 rounded-lg p-2.5 text-xs">
+            <summary class="cursor-pointer font-bold text-slate-300">🔑 הגדרת מפתח API למענה ישיר בתוך האפליקציה (אופציונלי)</summary>
+            <div class="mt-2 space-y-2">
+                <p class="text-[11px] text-slate-400">ניתן להזין מפתח Gemini API (חינמי מ-Google AI Studio) לקבלת תשובה מידית בתוך המסך, או להשתמש בכפתורי ההעתקה והשליחה ל-ChatGPT / Gemini ללא מפתח.</p>
+                <input type="password" id="gemini-api-key" placeholder="הדבק כאן Gemini API Key (AIza...)" class="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-white mono">
+            </div>
+        </details>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <button onclick="runDirectGeminiAnalysis()" class="py-2.5 px-3 rounded-lg bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white text-xs font-bold shadow-lg">
+                ✨ נתח עכשיו בתוך האפליקציה (Gemini API)
+            </button>
+            <button onclick="copyPromptWithLogData()" class="py-2.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-lg">
+                📋 העתק פרומפט + נתוני לוג (להדבקה ב-Gemini / ChatGPT)
+            </button>
+        </div>
+
+        <div class="flex-1 flex flex-col gap-1 min-h-[160px]">
+            <div class="flex items-center justify-between text-xs">
+                <span class="font-bold text-cyan-400">תוצאת ניתוח / חבילת נתונים מוכנה:</span>
+                <span id="ai-status-lbl" class="text-[11px] text-slate-400">מוכן</span>
+            </div>
+            <div id="ai-output-box" class="flex-1 bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs text-slate-200 whitespace-pre-wrap overflow-y-auto leading-relaxed">בחר באחת האפשרויות למעלה כדי להפיק ניתוח חכם מבוסס AI על נתוני הלוג שלך.</div>
+        </div>
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- MODALS: SHIZUKU GUIDE & DEVICE 4636 MENU                              -->
+    <!-- ===================================================================== -->
+    <div id="shizuku-guide-modal" class="hidden fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-cyan-500/40 rounded-xl max-w-md w-full p-4 shadow-2xl">
+            <div class="flex items-center justify-between mb-2">
+                <h3 class="text-sm font-bold text-white">⚡ הפעלת Shizuku לשליטה ישירה במודם</h3>
+                <button onclick="closeShizukuModal()" class="text-slate-400 hover:text-white text-base">✕</button>
+            </div>
+            <p class="text-xs text-slate-300 mb-2">
+                שירות <strong>Shizuku</strong> כבוי כרגע (נדרשת הפעלה מחדש לאחר כיבוי המכשיר):
+            </p>
+            <ol class="list-decimal list-inside text-xs text-slate-200 space-y-1.5 bg-slate-950 border border-slate-800 rounded-lg p-2.5 mb-3">
+                <li>ודא חיבור לרשת <strong>Wi-Fi</strong> פעילה.</li>
+                <li>פתח <strong>Developer Options</strong> והפעל <strong>Wireless debugging</strong>.</li>
+                <li>פתח את אפליקציית <strong>Shizuku</strong> ולחץ על <strong>Start</strong>.</li>
+            </ol>
+            <div class="flex flex-col gap-1.5">
+                <button onclick="openDevOptionsNative()" class="w-full py-2 px-3 bg-cyan-600 text-white rounded-lg text-xs font-bold">⚙️ פתח Developer Options</button>
+                <button onclick="openShizukuAppNative()" class="w-full py-2 px-3 bg-indigo-600 text-white rounded-lg text-xs font-bold">🚀 פתח אפליקציית Shizuku</button>
+                <button onclick="openHelpCenter()" class="w-full py-2 px-3 bg-emerald-600/20 text-emerald-300 border border-emerald-500/40 rounded-lg text-xs font-bold">❓ פתח מדריך התקנה מלא (כולל צילומי מסך)</button>
+                <button onclick="closeShizukuModal()" class="w-full py-1.5 px-3 bg-slate-800 text-slate-300 rounded-lg text-xs">סגור (צפייה בנתונים בלבד)</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="device-modal" class="hidden fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-xl max-w-md w-full p-4 shadow-2xl">
+            <div class="flex items-center justify-between mb-2">
+                <h3 class="text-sm font-bold text-white">📱 תפריט הנדסת רדיו של אנדרואיד</h3>
+                <button onclick="closeDeviceModal()" class="text-slate-400 hover:text-white text-base">✕</button>
+            </div>
+            <div class="bg-slate-950 border border-slate-800 rounded-lg p-2.5 mb-3 text-xs">
+                <p class="text-slate-400 mb-1.5">חייג בחייגן הטלפון לנעילת דור ידנית:</p>
+                <div class="flex items-center justify-between bg-slate-900 p-2 rounded border border-slate-700">
+                    <span class="mono text-sm font-bold text-emerald-400">*#*#4636#*#*</span>
+                    <button onclick="copyDialerCode()" class="px-2 py-1 bg-cyan-600 text-white rounded text-[11px] font-bold">העתק</button>
+                </div>
+            </div>
+            <button onclick="closeDeviceModal()" class="w-full py-2 bg-slate-800 text-slate-200 rounded-lg text-xs font-bold">סגור</button>
+        </div>
+    </div>
+
+    <script>
+        const state = {
+            airplaneMode: false,
+            ratLock: 'AUTO',
+            activeRat: '4G',
+            sampleCount: 0,
+            hoCount: 0,
+            logFilter: 'ALL',
+            servingCell: {
+                tech: '---', band: '---', plmn: 'ממתין להרשאות/מודם',
+                pci: '---', gnb: '---', arfcn: '---', tac: '---', bw: '---', ta: 0
+            },
+            rf: { rsrp: null, rsrq: null, sinr: null, rssi: null },
+            neighbors: [],
+            history: [],
+            liveSamples: [],
+            importedSamples: null,
+            importedFileName: null,
+            logs: []
+        };
+
+        const MAX_HISTORY = 90;
+
+        function getActiveSamples() {
+            return state.importedSamples !== null ? state.importedSamples : state.liveSamples;
+        }
+
+        function openHelpCenter() {
+            window.location.href = 'help.html';
+        }
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-view').forEach(el => el.classList.add('hidden'));
+            document.getElementById('view-' + tabName).classList.remove('hidden');
+
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.className = 'tab-btn py-1 rounded-md text-slate-400 hover:text-white transition';
+            });
+            document.getElementById('tab-btn-' + tabName).className = 'tab-btn py-1 rounded-md bg-cyan-600 text-white transition';
+
+            if (tabName === 'analytics') {
+                runLogAnalytics();
+            } else if (tabName === 'ai') {
+                document.getElementById('ai-dataset-badge').textContent =
+                    state.importedFileName ? `קובץ מיובא: ${state.importedFileName}` : `הלוג החי (${state.liveSamples.length} דגימות)`;
+            }
+        }
+
+        function showToast(title, message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            const borderCol = type === 'ho' ? 'border-cyan-500' : (type === 'warn' ? 'border-rose-500' : 'border-indigo-500');
+            toast.className = `pointer-events-auto bg-slate-900/95 border-r-4 ${borderCol} border border-slate-700 rounded-lg p-2 shadow-xl text-xs`;
+            toast.innerHTML = `<div class="font-bold text-cyan-300">${title}</div><div class="text-slate-200 text-[11px]">${message}</div>`;
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 3500);
+        }
+
+        function openShizukuModal() { document.getElementById('shizuku-guide-modal').classList.remove('hidden'); }
+        function closeShizukuModal() { document.getElementById('shizuku-guide-modal').classList.add('hidden'); }
+        function openRealDeviceSettings() { document.getElementById('device-modal').classList.remove('hidden'); }
+        function closeDeviceModal() { document.getElementById('device-modal').classList.add('hidden'); }
+        function copyDialerCode() {
+            navigator.clipboard.writeText('*#*#4636#*#*');
+            showToast('הקוד הועתק', '*#*#4636#*#* הועתק ללוח');
+        }
+        function openDevOptionsNative() {
+            if (window.AndroidModem && window.AndroidModem.openDeveloperOptions) window.AndroidModem.openDeveloperOptions();
+        }
+        function openShizukuAppNative() {
+            if (window.AndroidModem && window.AndroidModem.openShizukuApp) window.AndroidModem.openShizukuApp();
+        }
+
+        window.onShizukuStatus = function(isRunning) {
+            const btn = document.getElementById('btn-shizuku-status');
+            if (isRunning) {
+                btn.className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40';
+                btn.textContent = '⚡ Shizuku פעיל';
+                closeShizukuModal();
+            } else {
+                btn.className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40';
+                btn.textContent = '⚡ הפעל Shizuku';
+                openShizukuModal();
+            }
+        };
+
+        function setRatMode(mode) {
+            state.ratLock = mode;
+            document.querySelectorAll('.rat-btn').forEach(b => {
+                b.className = 'rat-btn px-2 py-1 rounded font-medium text-slate-300';
+            });
+            document.getElementById('rat-' + mode).className = 'rat-btn px-2 py-1 rounded font-bold bg-cyan-600 text-white';
+
+            addLog('SYS', 'CMD', `RAT_Lock: ${mode}`, `Requested hardware RAT lock to ${mode}`);
+            if (window.AndroidModem && window.AndroidModem.setRatMode) {
+                window.AndroidModem.setRatMode(mode);
+            }
+        }
+
+        function toggleAirplaneMode() {
+            state.airplaneMode = !state.airplaneMode;
+            const btn = document.getElementById('btn-airplane');
+            const txt = document.getElementById('airplane-text');
+            if (state.airplaneMode) {
+                btn.className = 'px-2.5 py-1 rounded text-[11px] font-bold bg-amber-500 text-slate-950';
+                txt.textContent = 'טיסה: פעיל';
+            } else {
+                btn.className = 'px-2.5 py-1 rounded text-[11px] font-bold bg-slate-800 text-amber-300 border border-slate-700';
+                txt.textContent = 'טיסה: כבוי';
+            }
+            addLog('SYS', 'CMD', `Airplane_Mode: ${state.airplaneMode ? 'ON' : 'OFF'}`, `Toggled RF transceiver`);
+            if (window.AndroidModem && window.AndroidModem.setAirplaneMode) {
+                window.AndroidModem.setAirplaneMode(state.airplaneMode);
+            }
+        }
+
+        function addLog(category, direction, title, summary) {
+            const now = new Date();
+            const ts = now.toTimeString().split(' ')[0];
+            state.logs.unshift({ id: Date.now() + Math.random(), timestamp: ts, category, direction, title, summary });
+            if (state.logs.length > 400) state.logs.pop();
+            if (!document.getElementById('view-logs').classList.contains('hidden')) {
+                renderLogs();
+            }
+        }
+
+        function setLogFilter(filter) {
+            state.logFilter = filter;
+            document.querySelectorAll('.log-filter-btn').forEach(btn => {
+                btn.className = 'log-filter-btn px-2.5 py-1 rounded bg-slate-800 text-slate-300';
+            });
+            document.getElementById('filter-' + filter).className = 'log-filter-btn px-2.5 py-1 rounded bg-cyan-600 text-white font-bold';
+            renderLogs();
+        }
+
+        function renderLogs() {
+            const container = document.getElementById('log-stream');
+            const filtered = state.logs.filter(l => state.logFilter === 'ALL' || l.category === state.logFilter);
+            if (filtered.length === 0) {
+                container.innerHTML = '<div class="text-slate-500 text-center py-6">אין רשומות להצגה בקטגוריה זו.</div>';
+                return;
+            }
+            container.innerHTML = filtered.map(log => {
+                const badge = log.category === 'HO'
+                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                    : (log.category === 'RF' ? 'bg-emerald-500/15 text-emerald-300' : 'bg-amber-500/20 text-amber-300');
+                return `
+                    <div class="p-1.5 rounded border border-slate-800/80 bg-slate-900/50">
+                        <div class="flex items-center gap-1.5">
+                            <span class="text-slate-500">[${log.timestamp}]</span>
+                            <span class="px-1 rounded text-[10px] font-bold ${badge}">${log.category}</span>
+                            <span class="text-white font-bold">${log.title}</span>
+                        </div>
+                        <div class="text-slate-300 text-[11px] mt-0.5">${log.summary}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function clearLogs() {
+            state.logs = [];
+            state.liveSamples = [];
+            state.sampleCount = 0;
+            renderLogs();
+            updateLiveUI();
+        }
+
+        window.onRealModemData = function(data) {
+            const badge = document.getElementById('status-badge');
+            const dot = document.getElementById('status-dot');
+            const txt = document.getElementById('status-text');
+            badge.className = 'inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30';
+            dot.className = 'w-1.5 h-1.5 rounded-full bg-emerald-400 live-dot';
+            txt.textContent = 'REAL MODEM';
+
+            if (data.servingCell) {
+                const sc = data.servingCell;
+                if (sc.handoverOccurred) {
+                    state.hoCount++;
+                    const hoMsg = `PCI ${sc.previousPci} -> PCI ${sc.pci} (${sc.tech} ${sc.band})`;
+                    addLog('HO', 'HW', `[HO #${state.hoCount}] Cell Handover`, hoMsg);
+                    showToast('מעבר תחנת בסיס (Handover)', hoMsg, 'ho');
+                }
+
+                state.activeRat = sc.rat || '4G';
+                state.servingCell.plmn = sc.plmn || state.servingCell.plmn;
+                state.servingCell.tech = sc.tech || state.servingCell.tech;
+                state.servingCell.band = sc.band || state.servingCell.band;
+                if (sc.pci !== undefined && sc.pci >= 0) state.servingCell.pci = sc.pci;
+                if (sc.gnb !== undefined && sc.gnb >= 0) state.servingCell.gnb = sc.gnb;
+                if (sc.arfcn !== undefined && sc.arfcn >= 0) state.servingCell.arfcn = sc.arfcn;
+                if (sc.tac !== undefined && sc.tac >= 0) state.servingCell.tac = sc.tac;
+                if (sc.ta !== undefined) state.servingCell.ta = sc.ta;
+
+                if (sc.rsrp !== undefined && sc.rsrp < 0 && sc.rsrp > -155) state.rf.rsrp = sc.rsrp;
+                if (sc.rsrq !== undefined && sc.rsrq <= 0 && sc.rsrq > -45) state.rf.rsrq = sc.rsrq;
+                if (sc.sinr !== undefined && sc.sinr > -35 && sc.sinr < 55) state.rf.sinr = sc.sinr;
+                if (sc.rssi !== undefined && sc.rssi < 0 && sc.rssi > -145) state.rf.rssi = sc.rssi;
+            }
+
+            if (Array.isArray(data.neighbors)) {
+                state.neighbors = data.neighbors;
+            }
+
+            state.sampleCount++;
+            const sampleObj = {
+                timestamp: new Date().toISOString(),
+                rat: state.activeRat,
+                tech: state.servingCell.tech,
+                band: state.servingCell.band,
+                plmn: state.servingCell.plmn,
+                cell_id: state.servingCell.pci,
+                gnb: state.servingCell.gnb,
+                arfcn: state.servingCell.arfcn,
+                tac: state.servingCell.tac,
+                rsrp: state.rf.rsrp,
+                rsrq: state.rf.rsrq,
+                sinr: state.rf.sinr,
+                rssi: state.rf.rssi
+            };
+            state.liveSamples.push(sampleObj);
+            if (state.liveSamples.length > 10000) state.liveSamples.shift();
+
+            addLog('RF', 'RX', `${sampleObj.tech} (${sampleObj.band}) PCI:${sampleObj.cell_id}`,
+                `RSRP: ${sampleObj.rsrp} dBm | RSRQ: ${sampleObj.rsrq} dB | SINR: ${sampleObj.sinr} dB`);
+
+            if (state.rf.rsrp !== null) {
+                state.history.push({
+                    rsrp: state.rf.rsrp,
+                    rssi: state.rf.rssi !== null ? state.rf.rssi : state.rf.rsrp + 22,
+                    sinr: state.rf.sinr !== null ? state.rf.sinr : 0
+                });
+                if (state.history.length > MAX_HISTORY) state.history.shift();
+            }
+
+            updateLiveUI();
+        };
+
+        function updateLiveUI() {
+            document.getElementById('sample-count').textContent = state.sampleCount;
+            document.getElementById('ho-count').textContent = state.hoCount;
+
+            document.getElementById('cell-tech').textContent = state.servingCell.tech;
+            document.getElementById('cell-band').textContent = state.servingCell.band;
+            document.getElementById('cell-plmn').textContent = state.servingCell.plmn;
+            document.getElementById('cell-pci').textContent = state.servingCell.pci;
+            document.getElementById('cell-gnb').textContent = state.servingCell.gnb;
+            document.getElementById('cell-arfcn').textContent = state.servingCell.arfcn;
+            document.getElementById('cell-tac').textContent = state.servingCell.tac;
+            document.getElementById('cell-bw').textContent = state.servingCell.band;
+            document.getElementById('cell-ta').textContent = state.servingCell.ta > 0 ? `${state.servingCell.ta} (~${state.servingCell.ta * 15}m)` : '0';
+
+            if (state.activeRat === '3G') {
+                document.getElementById('kpi1-name').textContent = 'RSCP';
+                document.getElementById('kpi2-name').textContent = 'Ec/No';
+            } else if (state.activeRat === '2G') {
+                document.getElementById('kpi1-name').textContent = 'RxLev';
+                document.getElementById('kpi2-name').textContent = 'BER';
+            } else {
+                document.getElementById('kpi1-name').textContent = 'RSRP';
+                document.getElementById('kpi2-name').textContent = 'RSRQ';
+            }
+
+            if (state.rf.rsrp !== null) {
+                const rsrpEl = document.getElementById('val-rsrp');
+                rsrpEl.textContent = Number(state.rf.rsrp).toFixed(1);
+                const pct = Math.min(100, Math.max(0, ((state.rf.rsrp + 130) / 70) * 100));
+                document.getElementById('bar-rsrp').style.width = pct + '%';
+                const b = document.getElementById('rsrp-badge');
+                if (state.rf.rsrp >= -90) {
+                    rsrpEl.className = 'text-base font-black text-emerald-400 mono';
+                    b.className = 'text-[9px] px-1 rounded bg-emerald-500/20 text-emerald-400';
+                    b.textContent = 'מצוין';
+                } else if (state.rf.rsrp >= -105) {
+                    rsrpEl.className = 'text-base font-black text-amber-400 mono';
+                    b.className = 'text-[9px] px-1 rounded bg-amber-500/20 text-amber-400';
+                    b.textContent = 'בינוני';
+                } else {
+                    rsrpEl.className = 'text-base font-black text-rose-400 mono';
+                    b.className = 'text-[9px] px-1 rounded bg-rose-500/20 text-rose-400';
+                    b.textContent = 'חלש';
+                }
+            }
+
+            if (state.rf.rsrq !== null) {
+                document.getElementById('val-rsrq').textContent = Number(state.rf.rsrq).toFixed(1);
+                document.getElementById('bar-rsrq').style.width = Math.min(100, Math.max(0, ((state.rf.rsrq + 20) / 17) * 100)) + '%';
+            }
+            if (state.rf.sinr !== null) {
+                document.getElementById('val-sinr').textContent = Number(state.rf.sinr).toFixed(1);
+                document.getElementById('bar-sinr').style.width = Math.min(100, Math.max(0, ((state.rf.sinr + 10) / 40) * 100)) + '%';
+            }
+            if (state.rf.rssi !== null) {
+                document.getElementById('val-rssi').textContent = Number(state.rf.rssi).toFixed(1);
+                document.getElementById('bar-rssi').style.width = Math.min(100, Math.max(0, ((state.rf.rssi + 115) / 65) * 100)) + '%';
+            }
+
+            document.getElementById('neighbor-count').textContent = `${state.neighbors.length} cells`;
+            const tbody = document.getElementById('neighbors-tbody');
+            if (state.neighbors.length > 0) {
+                tbody.innerHTML = state.neighbors.map(n => {
+                    const diff = (state.rf.rsrp !== null && n.rsrp !== undefined) ? (n.rsrp - state.rf.rsrp).toFixed(1) : '--';
+                    const diffClass = parseFloat(diff) > 0 ? 'text-emerald-400 font-bold' : 'text-slate-400';
+                    return `
+                        <tr>
+                            <td class="py-0.5 px-1 font-bold text-white">${n.pci}</td>
+                            <td class="py-0.5 px-1 text-slate-300">${n.tech}</td>
+                            <td class="py-0.5 px-1 text-slate-400">${n.arfcn}</td>
+                            <td class="py-0.5 px-1 text-cyan-300">${n.rsrp} dBm</td>
+                            <td class="py-0.5 px-1 ${diffClass}">${parseFloat(diff) > 0 ? '+' + diff : diff}</td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+        }
+
+        const canvas = document.getElementById('rfChart');
+        const ctx = canvas.getContext('2d');
+        function renderLiveChart() {
+            const dpr = window.devicePixelRatio || 1;
+            const rect = canvas.getBoundingClientRect();
+            if (rect.width > 0 && (canvas.width !== rect.width * dpr || canvas.height !== rect.height * dpr)) {
+                canvas.width = rect.width * dpr;
+                canvas.height = rect.height * dpr;
+            }
+            ctx.save();
+            ctx.scale(dpr, dpr);
+            const w = rect.width;
+            const h = rect.height;
+            ctx.clearRect(0, 0, w, h);
+
+            ctx.strokeStyle = '#1e293b';
+            ctx.lineWidth = 1;
+            for (let i = 1; i < 3; i++) {
+                ctx.beginPath();
+                ctx.moveTo(0, (h / 3) * i);
+                ctx.lineTo(w, (h / 3) * i);
+                ctx.stroke();
+            }
+
+            if (state.history.length > 1) {
+                const stepX = w / (MAX_HISTORY - 1);
+                const drawLine = (key, minV, maxV, col) => {
+                    ctx.beginPath();
+                    ctx.strokeStyle = col;
+                    ctx.lineWidth = 1.8;
+                    state.history.forEach((pt, idx) => {
+                        const norm = Math.min(1, Math.max(0, (pt[key] - minV) / (maxV - minV)));
+                        const x = idx * stepX;
+                        const y = h - norm * (h - 12) - 6;
+                        if (idx === 0) ctx.moveTo(x, y);
+                        else ctx.lineTo(x, y);
+                    });
+                    ctx.stroke();
+                };
+                drawLine('rsrp', -135, -55, '#34d399');
+                drawLine('rssi', -115, -40, '#fbbf24');
+                drawLine('sinr', -10, 30, '#818cf8');
+            }
+            ctx.restore();
+            requestAnimationFrame(renderLiveChart);
+        }
+
+        function exportLogs(format) {
+            const samples = getActiveSamples();
+            if (samples.length === 0) {
+                showToast('אין נתונים לייצוא', 'המתן לקבלת דגימות מהמודם או טען קובץ.', 'warn');
+                return;
+            }
+            let content = '';
+            let mime = '';
+            let filename = '';
+            if (format === 'csv') {
+                const headers = ['timestamp', 'rat', 'tech', 'band', 'plmn', 'cell_id', 'gnb', 'arfcn', 'tac', 'rsrp', 'rsrq', 'sinr', 'rssi'];
+                const rows = samples.map(s => headers.map(h => s[h] ?? '').join(','));
+                content = [headers.join(','), ...rows].join('\n');
+                mime = 'text/csv;charset=utf-8;';
+                filename = `cellular_log_${Date.now()}.csv`;
+            } else {
+                content = JSON.stringify({ exportedAt: new Date().toISOString(), samples, events: state.logs }, null, 2);
+                mime = 'application/json;charset=utf-8;';
+                filename = `cellular_log_${Date.now()}.json`;
+            }
+
+            if (window.AndroidModem && window.AndroidModem.saveExportFile) {
+                window.AndroidModem.saveExportFile(filename, content);
+                showToast('הקובץ נשמר בהצלחה', `נשמר בתיקיית Downloads: ${filename}`);
+            } else {
+                const blob = new Blob([content], { type: mime });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                a.click();
+                URL.revokeObjectURL(url);
+                showToast('הקובץ יוצא בהצלחה', filename);
+            }
+        }
+
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const text = e.target.result;
+                try {
+                    let parsedSamples = [];
+                    if (file.name.endsWith('.json')) {
+                        const obj = JSON.parse(text);
+                        parsedSamples = Array.isArray(obj) ? obj : (obj.samples || []);
+                        if (obj.events && Array.isArray(obj.events)) {
+                            state.logs = obj.events;
+                        }
+                    } else {
+                        const lines = text.trim().split(/\r?\n/);
+                        const headers = lines[0].split(',').map(h => h.trim());
+                        for (let i = 1; i < lines.length; i++) {
+                            const cols = lines[i].split(',');
+                            if (cols.length < 3) continue;
+                            const row = {};
+                            headers.forEach((h, idx) => {
+                                const val = cols[idx] ? cols[idx].trim() : '';
+                                row[h] = ['rsrp', 'rsrq', 'sinr', 'rssi', 'cell_id', 'arfcn'].includes(h) && val !== '' && !isNaN(val)
+                                    ? Number(val)
+                                    : val;
+                            });
+                            parsedSamples.push(row);
+                        }
+                    }
+
+                    if (parsedSamples.length === 0) {
+                        showToast('קובץ ריק או לא תקין', 'לא נמצאו שורות מדידה בקובץ.', 'warn');
+                        return;
+                    }
+
+                    state.importedSamples = parsedSamples;
+                    state.importedFileName = file.name;
+                    document.getElementById('active-dataset-label').textContent = `קובץ מיובא: ${file.name} (${parsedSamples.length} רשומות)`;
+                    document.getElementById('btn-reset-live').classList.remove('hidden');
+
+                    state.logs = parsedSamples.slice(-200).reverse().map((s, idx) => ({
+                        id: idx,
+                        timestamp: (s.timestamp || '').split('T').pop().replace('Z', ''),
+                        category: 'RF',
+                        direction: 'FILE',
+                        title: `${s.tech || s.rat || 'CELL'} (${s.band || ''}) PCI:${s.cell_id ?? '--'}`,
+                        summary: `RSRP: ${s.rsrp} dBm | RSRQ: ${s.rsrq} dB | SINR: ${s.sinr} dB`
+                    }));
+                    renderLogs();
+                    showToast('הקובץ נטען בהצלחה', `${parsedSamples.length} דגימות מוכנות לניתוח וגרפים.`);
+                } catch (err) {
+                    showToast('שגיאה בקריאת הקובץ', err.message, 'warn');
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function resetToLiveDataset() {
+            state.importedSamples = null;
+            state.importedFileName = null;
+            document.getElementById('active-dataset-label').textContent = 'הקלטה חיה מהמכשיר';
+            document.getElementById('btn-reset-live').classList.add('hidden');
+            showToast('חזרה לנתונים חיים', 'הניתוח והלוג מציגים כעת את נתוני המכשיר בזמן אמת.');
+        }
+
+        function computeLogSummary() {
+            const samples = getActiveSamples();
+            if (!samples || samples.length === 0) return null;
+
+            const rsrps = samples.map(s => Number(s.rsrp)).filter(v => !isNaN(v) && v < 0);
+            const sinrs = samples.map(s => Number(s.sinr)).filter(v => !isNaN(v));
+            const rsrqs = samples.map(s => Number(s.rsrq)).filter(v => !isNaN(v) && v <= 0);
+
+            const avg = arr => arr.length ? (arr.reduce((a, b) => a + b, 0) / arr.length) : null;
+            const avgRsrp = avg(rsrps);
+            const minRsrp = rsrps.length ? Math.min(...rsrps) : null;
+            const maxRsrp = rsrps.length ? Math.max(...rsrps) : null;
+
+            const avgSinr = avg(sinrs);
+            const minSinr = sinrs.length ? Math.min(...sinrs) : null;
+            const maxSinr = sinrs.length ? Math.max(...sinrs) : null;
+
+            let hoTransitions = 0;
+            let prevPci = null;
+            const cellCounts = {};
+            const ratCounts = {};
+            const bandCounts = {};
+
+            samples.forEach(s => {
+                const pci = s.cell_id;
+                if (pci !== undefined && pci !== null && pci !== '---') {
+                    if (prevPci !== null && pci !== prevPci) hoTransitions++;
+                    prevPci = pci;
+                    cellCounts[pci] = (cellCounts[pci] || 0) + 1;
+                }
+                const rat = s.tech || s.rat || 'Unknown';
+                ratCounts[rat] = (ratCounts[rat] || 0) + 1;
+                if (s.band) bandCounts[s.band] = (bandCounts[s.band] || 0) + 1;
+            });
+
+            const domRat = Object.entries(ratCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || '---';
+
+            return {
+                totalSamples: samples.length,
+                rsrps,
+                avgRsrp, minRsrp, maxRsrp,
+                avgSinr, minSinr, maxSinr,
+                avgRsrq: avg(rsrqs),
+                hoTransitions,
+                uniqueCells: Object.keys(cellCounts).length,
+                cellCounts,
+                ratCounts,
+                bandCounts,
+                domRat
+            };
+        }
+
+        function runLogAnalytics() {
+            const stats = computeLogSummary();
+            document.getElementById('analytics-subtitle').textContent = state.importedFileName
+                ? `מנתח קובץ: ${state.importedFileName}`
+                : `מנתח הקלטה חיה (${state.liveSamples.length} דגימות)`;
+
+            if (!stats) {
+                document.getElementById('analytics-conclusions').innerHTML = '<li>אין עדיין מספיק דגימות. המתן מספר שניות לקליטה מהמכשיר או טען קובץ בלשונית הלוג.</li>';
+                return;
+            }
+
+            document.getElementById('stat-avg-rsrp').textContent = stats.avgRsrp !== null ? `${stats.avgRsrp.toFixed(1)} dBm` : '---';
+            document.getElementById('stat-minmax-rsrp').textContent = stats.minRsrp !== null ? `${stats.minRsrp} / ${stats.maxRsrp} dBm` : '--';
+            document.getElementById('stat-avg-sinr').textContent = stats.avgSinr !== null ? `${stats.avgSinr.toFixed(1)} dB` : '---';
+            document.getElementById('stat-minmax-sinr').textContent = stats.minSinr !== null ? `${stats.minSinr} / ${stats.maxSinr} dB` : '--';
+            document.getElementById('stat-ho-total').textContent = stats.hoTransitions;
+            document.getElementById('stat-unique-cells').textContent = `תאים ייחודיים: ${stats.uniqueCells}`;
+            document.getElementById('stat-dom-rat').textContent = stats.domRat;
+            document.getElementById('stat-total-samples').textContent = `סה"כ דגימות: ${stats.totalSamples}`;
+
+            const conclusions = [];
+            if (stats.avgRsrp !== null) {
+                if (stats.avgRsrp >= -90) {
+                    conclusions.push(`עוצמת הקליטה הממוצעת מצוינת (${stats.avgRsrp.toFixed(1)} dBm) — המכשיר נמצא בכיסוי קרוב וישיר לאנטנה.`);
+                } else if (stats.avgRsrp >= -105) {
+                    conclusions.push(`עוצמת הקליטה בינונית (${stats.avgRsrp.toFixed(1)} dBm) — ייתכנו ירידות קצב בתוך מבנים סגורים.`);
+                } else {
+                    conclusions.push(`אזהרת כיסוי חלש (${stats.avgRsrp.toFixed(1)} dBm) — המכשיר פועל בקצה טווח האנטנה ונדרש להשקיע הספק שידור גבוה.`);
+                }
+            }
+
+            if (stats.avgSinr !== null) {
+                if (stats.avgSinr < 3) {
+                    conclusions.push(`יחס אות לרעש נמוך (SINR ממוצע ${stats.avgSinr.toFixed(1)} dB) — מעיד על הפרעות בין-תאיות או עומס משתמשים גבוה בתא למרות עוצמת האות.`);
+                } else if (stats.avgSinr >= 13) {
+                    conclusions.push(`איכות ספקטרלית נקייה (SINR ממוצע ${stats.avgSinr.toFixed(1)} dB) — תנאים אידיאליים לאפנון גבוה (256QAM) ומהירות גלישה מרבית.`);
+                }
+            }
+
+            const hoRate = stats.totalSamples > 0 ? (stats.hoTransitions / stats.totalSamples) : 0;
+            if (stats.hoTransitions > 4 && hoRate > 0.15) {
+                conclusions.push(`זוהה חוסר יציבות ומעברי תא תכופים (${stats.hoTransitions} מעברים בין ${stats.uniqueCells} תאים) — ייתכן מצב Ping-Pong בין אנטנות סמוכות.`);
+            } else {
+                conclusions.push(`יציבות החיבור לתא תקינה (${stats.hoTransitions} מעברי תא על פני ${stats.totalSamples} דגימות).`);
+            }
+
+            const bandsList = Object.entries(stats.bandCounts).map(([b, c]) => `${b} (${Math.round(c / stats.totalSamples * 100)}%)`).join(', ');
+            if (bandsList) {
+                conclusions.push(`התפלגות תדרים פעילים: ${bandsList}.`);
+            }
+
+            document.getElementById('analytics-conclusions').innerHTML = conclusions.map(c => `<li>${c}</li>`).join('');
+
+            drawRsrpHistogram(stats.rsrps);
+            drawRatDistributionChart(stats.ratCounts, stats.cellCounts);
+        }
+
+        function drawRsrpHistogram(rsrps) {
+            const c = document.getElementById('histCanvas');
+            const ctx = c.getContext('2d');
+            const dpr = window.devicePixelRatio || 1;
+            const rect = c.getBoundingClientRect();
+            c.width = rect.width * dpr;
+            c.height = rect.height * dpr;
+            ctx.scale(dpr, dpr);
+            const w = rect.width, h = rect.height;
+            ctx.clearRect(0, 0, w, h);
+
+            if (!rsrps.length) return;
+
+            const bins = [
+                { label: '> -80', min: -80, max: 0, count: 0, color: '#10b981' },
+                { label: '-80..-90', min: -90, max: -80, count: 0, color: '#34d399' },
+                { label: '-90..-100', min: -100, max: -90, count: 0, color: '#38bdf8' },
+                { label: '-100..-110', min: -110, max: -100, count: 0, color: '#fbbf24' },
+                { label: '< -110', min: -200, max: -110, count: 0, color: '#f43f5e' }
+            ];
+
+            rsrps.forEach(v => {
+                for (const b of bins) {
+                    if (v >= b.min && v < b.max) { b.count++; break; }
+                }
+            });
+
+            const maxCount = Math.max(1, ...bins.map(b => b.count));
+            const padX = 16, padBottom = 22, padTop = 18;
+            const barW = (w - padX * 2) / bins.length - 10;
+
+            bins.forEach((b, i) => {
+                const barH = ((b.count / maxCount) * (h - padBottom - padTop));
+                const x = padX + i * ((w - padX * 2) / bins.length) + 5;
+                const y = h - padBottom - barH;
+
+                ctx.fillStyle = b.color;
+                ctx.fillRect(x, y, barW, barH);
+
+                ctx.fillStyle = '#e2e8f0';
+                ctx.font = 'bold 10px JetBrains Mono';
+                ctx.textAlign = 'center';
+                ctx.fillText(b.count, x + barW / 2, y - 4);
+
+                ctx.fillStyle = '#94a3b8';
+                ctx.font = '10px JetBrains Mono';
+                ctx.fillText(b.label, x + barW / 2, h - 6);
+            });
+        }
+
+        function drawRatDistributionChart(ratCounts, cellCounts) {
+            const c = document.getElementById('ratChartCanvas');
+            const ctx = c.getContext('2d');
+            const dpr = window.devicePixelRatio || 1;
+            const rect = c.getBoundingClientRect();
+            c.width = rect.width * dpr;
+            c.height = rect.height * dpr;
+            ctx.scale(dpr, dpr);
+            const w = rect.width, h = rect.height;
+            ctx.clearRect(0, 0, w, h);
+
+            const entries = Object.entries(cellCounts).sort((a, b) => b[1] - a[1]).slice(0, 6);
+            if (!entries.length) return;
+
+            const total = entries.reduce((acc, e) => acc + e[1], 0);
+            const rowH = Math.min(24, (h - 16) / entries.length);
+
+            entries.forEach(([pci, count], idx) => {
+                const pct = Math.round((count / total) * 100);
+                const y = 10 + idx * rowH;
+                const maxBarW = w - 130;
+                const barW = (count / total) * maxBarW;
+
+                ctx.fillStyle = '#cbd5e1';
+                ctx.font = 'bold 11px JetBrains Mono';
+                ctx.textAlign = 'left';
+                ctx.fillText(`PCI ${pci}`, 8, y + 13);
+
+                ctx.fillStyle = '#1e293b';
+                ctx.fillRect(80, y + 3, maxBarW, 13);
+
+                ctx.fillStyle = idx === 0 ? '#06b6d4' : '#6366f1';
+                ctx.fillRect(80, y + 3, barW, 13);
+
+                ctx.fillStyle = '#f8fafc';
+                ctx.fillText(`${pct}% (${count})`, 85 + barW, y + 13);
+            });
+        }
+
+        function setAiPreset(text) {
+            document.getElementById('ai-user-prompt').value = text;
+        }
+
+        function buildAiPayloadPrompt() {
+            const userPrompt = document.getElementById('ai-user-prompt').value.trim();
+            const stats = computeLogSummary();
+            const samples = getActiveSamples();
+
+            if (!stats || samples.length === 0) {
+                return null;
+            }
+
+            const step = Math.max(1, Math.floor(samples.length / 40));
+            const sampledRows = [];
+            for (let i = 0; i < samples.length; i += step) {
+                const s = samples[i];
+                sampledRows.push(`${s.timestamp || ''} | ${s.tech || s.rat} | Band:${s.band || '-'} | PCI:${s.cell_id} | RSRP:${s.rsrp} | RSRQ:${s.rsrq} | SINR:${s.sinr}`);
+            }
+
+            return `הנחיית המשתמש:
+${userPrompt}
+
+--- סיכום טלמטריית רדיו מהמכשיר (${state.importedFileName || 'הקלטה חיה'}) ---
+סה"כ דגימות: ${stats.totalSamples}
+טכנולוגיה דומיננטית: ${stats.domRat}
+RSRP (עוצמת אות): ממוצע ${stats.avgRsrp?.toFixed(1)} dBm (טווח ${stats.minRsrp} עד ${stats.maxRsrp} dBm)
+SINR (איכות אות): ממוצע ${stats.avgSinr?.toFixed(1)} dB (טווח ${stats.minSinr} עד ${stats.maxSinr} dB)
+מעברי תא (Handovers): ${stats.hoTransitions} מעברים בין ${stats.uniqueCells} תאים ייחודיים
+התפלגות תאים (PCI: דגימות): ${JSON.stringify(stats.cellCounts)}
+התפלגות תדרים: ${JSON.stringify(stats.bandCounts)}
+
+--- דגימות נבחרות לאורך ציר הזמן ---
+${sampledRows.join('\n')}`;
+        }
+
+        function copyPromptWithLogData() {
+            const fullText = buildAiPayloadPrompt();
+            if (!fullText) {
+                showToast('אין נתוני לוג', 'אסוף דגימות או טען קובץ לוג לפני הפקת הפרומפט.', 'warn');
+                return;
+            }
+            navigator.clipboard.writeText(fullText);
+            document.getElementById('ai-output-box').textContent = fullText;
+            document.getElementById('ai-status-lbl').textContent = 'הועתק ללוח!';
+            showToast('הפרומפט והנתונים הועתקו', 'הדבק כעת בצ\'אט של Gemini או ChatGPT לקבלת ניתוח מלא.');
+        }
+
+        async function runDirectGeminiAnalysis() {
+            const fullText = buildAiPayloadPrompt();
+            if (!fullText) {
+                showToast('אין נתוני לוג', 'אסוף דגימות או טען קובץ לוג תחילה.', 'warn');
+                return;
+            }
+
+            const apiKey = document.getElementById('gemini-api-key').value.trim();
+            if (!apiKey) {
+                copyPromptWithLogData();
+                showToast('לא הוזן מפתח API', 'הפרומפט המלא עם נתוני הלוג הועתק ללוח שלך להדבקה ישירה.', 'info');
+                return;
+            }
+
+            const outBox = document.getElementById('ai-output-box');
+            const statusLbl = document.getElementById('ai-status-lbl');
+            outBox.textContent = 'מבצע ניתוח AI על נתוני הרדיו... אנא המתן...';
+            statusLbl.textContent = 'מעבד...';
+
+            try {
+                const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: "אתה מהנדס תקשורת סלולרית מומחה (RF & 5G/4G Optimization). ענה בעברית ברורה ומקצועית.\n\n" + fullText }] }]
+                    })
+                });
+                const json = await resp.json();
+                if (json.error) {
+                    throw new Error(json.error.message || 'API Error');
+                }
+                const answer = json.candidates?.[0]?.content?.parts?.[0]?.text || 'לא התקבלה תשובה.';
+                outBox.textContent = answer;
+                statusLbl.textContent = 'הושלם בהצלחה';
+            } catch (err) {
+                outBox.textContent = `שגיאה בחיבור ל-Gemini API: ${err.message}\n\nהפרומפט המלא הוכן עבורך למטה להעתקה ידנית:\n\n${fullText}`;
+                statusLbl.textContent = 'שגיאה';
+            }
+        }
+
+        requestAnimationFrame(renderLiveChart);
+    </script>
+</body>
+</html>
