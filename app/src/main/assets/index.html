@@ -1186,7 +1186,13 @@ ${sampledRows.join('\n')}`;
     </script>
 
 <style>
-/* RT_PERM_AXES_V4_1_9 */
+
+<script>
+
+
+
+
+<style id="rt-clean-chart-style">
 .rt-axes-shell {
   position: relative;
   width: 100%;
@@ -1202,7 +1208,7 @@ ${sampledRows.join('\n')}`;
 }
 .rt-y-axis {
   width: 34px;
-  shrink: 0;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -1256,18 +1262,18 @@ ${sampledRows.join('\n')}`;
   direction: ltr;
 }
 </style>
-<script>
+<script id="rt-clean-chart-script">
 (function() {
-  if (window.__rtPermAxesV419) return;
-  window.__rtPermAxesV419 = true;
+  if (window.__rtCleanChartMounted) return;
+  window.__rtCleanChartMounted = true;
 
-  function mountPermanentAxes() {
+  function mountAxes() {
     const canvas = document.getElementById("rfChart");
-    if (!canvas || canvas.dataset.rtPermMounted === "1") return;
+    if (!canvas || canvas.dataset.rtCleanMounted === "1") return;
     const parent = canvas.parentElement;
     if (!parent) return;
 
-    canvas.dataset.rtPermMounted = "1";
+    canvas.dataset.rtCleanMounted = "1";
     const shell = document.createElement("div");
     shell.className = "rt-axes-shell";
 
@@ -1276,18 +1282,22 @@ ${sampledRows.join('\n')}`;
 
     const yAxis = document.createElement("div");
     yAxis.className = "rt-y-axis";
-    yAxis.innerHTML = '<span>-50</span><span>-75</span><span>-100</span><span>-125</span>';
+    yAxis.innerHTML = "<span>-50</span><span>-75</span><span>-100</span><span>-125</span>";
 
     const plotBox = document.createElement("div");
     plotBox.className = "rt-plot-box";
 
     const livePill = document.createElement("div");
     livePill.className = "rt-live-pill";
-    livePill.innerHTML = '<span style="color:#34d399" id="rt-pill-rsrp">RSRP: --</span><span style="color:#38bdf8" id="rt-pill-rsrq">RSRQ: --</span><span style="color:#fbbf24" id="rt-pill-rssi">RSSI: --</span><span style="color:#818cf8" id="rt-pill-sinr">SINR: --</span>';
+    livePill.innerHTML =
+      '<span style="color:#34d399" id="rt-pill-rsrp">RSRP: --</span>' +
+      '<span style="color:#38bdf8" id="rt-pill-rsrq">RSRQ: --</span>' +
+      '<span style="color:#fbbf24" id="rt-pill-rssi">RSSI: --</span>' +
+      '<span style="color:#818cf8" id="rt-pill-sinr">SINR: --</span>';
 
     const xAxis = document.createElement("div");
     xAxis.className = "rt-x-axis";
-    xAxis.innerHTML = '<span>-60s</span><span>-40s</span><span>-20s</span><span>now</span>';
+    xAxis.innerHTML = "<span>-60s</span><span>-40s</span><span>-20s</span><span>now</span>";
 
     parent.insertBefore(shell, canvas);
     plotBox.appendChild(canvas);
@@ -1298,59 +1308,26 @@ ${sampledRows.join('\n')}`;
     shell.appendChild(xAxis);
   }
 
-  function syncLiveValues() {
-    mountPermanentAxes();
+  function syncPill() {
+    mountAxes();
     try {
       const rf = (typeof state !== "undefined" && state && state.rf) ? state.rf : null;
+      const fmt = v => (typeof v === "number" && !Number.isNaN(v)) ? v.toFixed(1) : "--";
       const rsrpEl = document.getElementById("rt-pill-rsrp");
       const rsrqEl = document.getElementById("rt-pill-rsrq");
       const rssiEl = document.getElementById("rt-pill-rssi");
       const sinrEl = document.getElementById("rt-pill-sinr");
-      if (rsrpEl && rf) {
-        rsrpEl.textContent = "RSRP: " + (typeof rf.rsrp === "number" && !Number.isNaN(rf.rsrp) ? rf.rsrp.toFixed(1) : "--");
-      }
-      if (rsrqEl && rf) {
-        rsrqEl.textContent = "RSRQ: " + (typeof rf.rsrq === "number" && !Number.isNaN(rf.rsrq) ? rf.rsrq.toFixed(1) : "--");
-      }
-      if (rssiEl && rf) {
-        rssiEl.textContent = "RSSI: " + (typeof rf.rssi === "number" && !Number.isNaN(rf.rssi) ? rf.rssi.toFixed(1) : "--");
-      }
-      if (sinrEl && rf) {
-        sinrEl.textContent = "SINR: " + (typeof rf.sinr === "number" && !Number.isNaN(rf.sinr) ? rf.sinr.toFixed(1) : "--");
-      }
+      if (rsrpEl && rf) rsrpEl.textContent = "RSRP: " + fmt(rf.rsrp);
+      if (rsrqEl && rf) rsrqEl.textContent = "RSRQ: " + fmt(rf.rsrq);
+      if (rssiEl && rf) rssiEl.textContent = "RSSI: " + fmt(rf.rssi);
+      if (sinrEl && rf) sinrEl.textContent = "SINR: " + fmt(rf.sinr);
     } catch (e) {}
   }
 
-  document.addEventListener("DOMContentLoaded", syncLiveValues);
-  setInterval(syncLiveValues, 500);
+  document.addEventListener("DOMContentLoaded", syncPill);
+  setInterval(syncPill, 500);
 })();
 </script>
-
-
-// [RT_AIRPLANE_MODE_GUARD]
-(function() {
-  const origHandler = window.onRealModemData;
-  window.onRealModemData = function(data) {
-    try {
-      if (data && (data.airplaneMode === true || data.servingCell === null)) {
-        if (typeof state !== "undefined" && state && state.rf) {
-          state.rf.rsrp = null;
-          state.rf.rsrq = null;
-          state.rf.rssi = null;
-          state.rf.sinr = null;
-        }
-        if (typeof state !== "undefined" && state && state.servingCell) {
-          state.servingCell.tech = "AIRPLANE";
-          state.servingCell.band = "---";
-          state.servingCell.pci = "---";
-        }
-      }
-    } catch (e) {}
-    if (typeof origHandler === "function") {
-      return origHandler(data);
-    }
-  };
-})();
 
 </body>
 </html>
