@@ -1,3 +1,4 @@
+// Update to version 4.1.7
 package com.cellular.rtmonitor
 
 import android.annotation.SuppressLint
@@ -6,6 +7,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.telephony.*
+import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.Executors
@@ -14,6 +16,10 @@ class ModemTelemetryEngine(
     private val context: Context,
     private val onTelemetryUpdate: (String) -> Unit
 ) {
+    companion object {
+        private const val TAG = "ModemTelemetryEngine"
+    }
+
     private val telephonyManager =
         context.getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
     private val executor = Executors.newSingleThreadExecutor()
@@ -28,7 +34,6 @@ class ModemTelemetryEngine(
             val callback = object : TelephonyCallback(),
                 TelephonyCallback.SignalStrengthsListener,
                 TelephonyCallback.CellInfoListener {
-
                 override fun onSignalStrengthsChanged(signalStrength: SignalStrength) {
                     collectAndEmitTelemetry()
                 }
@@ -56,6 +61,39 @@ class ModemTelemetryEngine(
                 legacyListener,
                 PhoneStateListener.LISTEN_SIGNAL_STRENGTHS or PhoneStateListener.LISTEN_CELL_INFO
             )
+        }
+    }
+
+    private fun isValidSinr(value: Int): Boolean {
+        return value != CellInfo.UNAVAILABLE && value != Int.MAX_VALUE && value in -30..50
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun fallbackSinrFromSignalStrength(preferNr: Boolean): Int? {
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val ssList = telephonyManager.signalStrength?.cellSignalStrengths ?: return null
+                if (preferNr) {
+                    for (s in ssList) {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && s is CellSignalStrengthNr) {
+                            if (isValidSinr(s.ssSinr)) return s.ssSinr
+                            if (isValidSinr(s.csiSinr)) return s.csiSinr
+                        }
+                    }
+                }
+                for (s in ssList) {
+                    if (s is CellSignalStrengthLte && isValidSinr(s.rssnr)) {
+                        return s.rssnr
+                    }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && s is CellSignalStrengthNr) {
+                        if (isValidSinr(s.ssSinr)) return s.ssSinr
+                        if (isValidSinr(s.csiSinr)) return s.csiSinr
+                    }
+                }
+            }
+            null
+        } catch (_: Exception) {
+            null
         }
     }
 
@@ -94,6 +132,10 @@ class ModemTelemetryEngine(
                         servingJson.put("handoverOccurred", false)
                     }
                     lastServingPci = currentPci
+                    Log.d(
+                        TAG,
+                        "Serving cell: tech=${servingJson.optString("tech")} pci=${servingJson.optInt("pci")} rsrp=${servingJson.opt("rsrp")} sinr=${servingJson.opt("sinr")}"
+                    )
                     payload.put("servingCell", servingJson)
                 } else {
                     val neighborJson = parseNeighborCell(info)
@@ -104,20 +146,18 @@ class ModemTelemetryEngine(
             }
 
             payload.put("neighbors", neighborsArray)
-
             val jsonString = payload.toString()
             mainHandler.post {
                 onTelemetryUpdate(jsonString)
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e(TAG, "collectAndEmitTelemetry error: ${e.message}", e)
         }
     }
 
     private fun parseServingCell(info: CellInfo, plmn: String): JSONObject {
         val obj = JSONObject()
         obj.put("plmn", plmn)
-
         when {
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && info is CellInfoNr -> {
                 val id = info.cellIdentity as CellIdentityNr
@@ -126,6 +166,12 @@ class ModemTelemetryEngine(
                     "n${id.bands.joinToString("+n")}"
                 } else {
                     "5G NR"
+                }
+
+                val rawNrSinr = when {
+                    isValidSinr(sig.ssSinr) -> sig.ssSinr
+                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && isValidSinr(sig.csiSinr) -> sig.csiSinr
+                    else -> fallbackSinrFromSignalStrength(preferNr = true)
                 }
 
                 obj.put("rat", "5G")
@@ -137,7 +183,11 @@ class ModemTelemetryEngine(
                 obj.put("tac", id.tac)
                 obj.put("rsrp", sig.ssRsrp)
                 obj.put("rsrq", sig.ssRsrq)
-                obj.put("sinr", sig.ssSinr)
+                if (rawNrSinr != null) {
+                    obj.put("sinr", rawNrSinr)
+                } else {
+                    obj.put("sinr", JSONObject.NULL)
+                }
                 obj.put("rssi", sig.ssRsrp + 22)
             }
 
@@ -150,6 +200,11 @@ class ModemTelemetryEngine(
                     "LTE"
                 }
 
+                val resolvedSinr = when {
+                    isValidSinr(sig.rssnr) -> sig.rssnr
+                    else -> fallbackSinrFromSignalStrength(preferNr = false)
+                }
+
                 obj.put("rat", "4G")
                 obj.put("tech", "4G LTE")
                 obj.put("band", bands)
@@ -159,7 +214,11 @@ class ModemTelemetryEngine(
                 obj.put("tac", id.tac)
                 obj.put("rsrp", sig.rsrp)
                 obj.put("rsrq", sig.rsrq)
-                obj.put("sinr", if (sig.rssnr != CellInfo.UNAVAILABLE) sig.rssnr else 0)
+                if (resolvedSinr != null) {
+                    obj.put("sinr", resolvedSinr)
+                } else {
+                    obj.put("sinr", JSONObject.NULL)
+                }
                 obj.put("rssi", if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && sig.rssi != CellInfo.UNAVAILABLE) sig.rssi else (sig.rsrp + 24))
                 obj.put("ta", if (sig.timingAdvance != CellInfo.UNAVAILABLE) sig.timingAdvance else 0)
             }
@@ -212,6 +271,7 @@ class ModemTelemetryEngine(
                 obj.put("rsrp", sig.ssRsrp)
                 obj.put("rsrq", sig.ssRsrq)
             }
+
             info is CellInfoLte -> {
                 val id = info.cellIdentity
                 val sig = info.cellSignalStrength
@@ -222,6 +282,7 @@ class ModemTelemetryEngine(
                 obj.put("rsrp", sig.rsrp)
                 obj.put("rsrq", sig.rsrq)
             }
+
             info is CellInfoWcdma -> {
                 val id = info.cellIdentity
                 val sig = info.cellSignalStrength
@@ -232,6 +293,7 @@ class ModemTelemetryEngine(
                 obj.put("rsrp", sig.dbm)
                 obj.put("rsrq", -10)
             }
+
             else -> return null
         }
         return obj
