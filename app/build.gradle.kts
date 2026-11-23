@@ -11,8 +11,8 @@ android {
         applicationId = "com.cellular.rtmonitor"
         minSdk = 26
         targetSdk = 34
-        versionCode = 5
-        versionName = "4.1-help-center"
+        versionCode = (System.getenv("VERSION_CODE")?.toIntOrNull() ?: 100)
+        versionName = "4.1.9"
     }
 
     buildTypes {
