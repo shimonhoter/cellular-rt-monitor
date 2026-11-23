@@ -1,3 +1,4 @@
+// Update to version 4.1.1
 package com.cellular.rtmonitor
 
 import android.content.Context
@@ -8,24 +9,37 @@ import android.os.Process as AndroidProcess
 import android.provider.Settings
 import android.telephony.SubscriptionManager
 import android.telephony.TelephonyManager
+import android.util.Log
 import androidx.annotation.RequiresApi
 import rikka.shizuku.Shizuku
+import java.io.BufferedReader
+import java.io.InputStreamReader
 
 class RealModemController(private val context: Context) {
+
+    companion object {
+        private const val TAG = "RealModemController"
+    }
 
     private val telephonyManager =
         context.getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
 
     private fun isShizukuAvailable(): Boolean {
         return try {
-            Shizuku.pingBinder() && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
+            val binderOk = Shizuku.pingBinder()
+            val perm = Shizuku.checkSelfPermission()
+            val granted = perm == PackageManager.PERMISSION_GRANTED
+            Log.i(TAG, "isShizukuAvailable: binder=$binderOk, perm=$perm, granted=$granted")
+            binderOk && granted
         } catch (e: Exception) {
+            Log.e(TAG, "isShizukuAvailable error: ${e.message}", e)
             false
         }
     }
 
     private fun runShizukuShellCommand(command: String): Boolean {
         return try {
+            Log.i(TAG, "runShizukuShellCommand start: $command")
             val method = Shizuku::class.java.getDeclaredMethod(
                 "newProcess",
                 Array<String>::class.java,
@@ -34,8 +48,21 @@ class RealModemController(private val context: Context) {
             )
             method.isAccessible = true
             val process = method.invoke(null, arrayOf("sh", "-c", command), null, null) as Process
-            process.waitFor() == 0
+
+            val outText = BufferedReader(InputStreamReader(process.inputStream)).use { it.readText().trim() }
+            val errText = BufferedReader(InputStreamReader(process.errorStream)).use { it.readText().trim() }
+            val exitCode = process.waitFor()
+
+            if (outText.isNotEmpty()) {
+                Log.i(TAG, "sh stdout: $outText")
+            }
+            if (errText.isNotEmpty()) {
+                Log.w(TAG, "sh stderr: $errText")
+            }
+            Log.i(TAG, "sh exitCode=$exitCode for cmd: $command")
+            exitCode == 0
         } catch (e: Exception) {
+            Log.e(TAG, "runShizukuShellCommand exception for [$command]: ${e.message}", e)
             e.printStackTrace()
             false
         }
@@ -71,6 +98,10 @@ class RealModemController(private val context: Context) {
 
         val subId = SubscriptionManager.getDefaultDataSubscriptionId()
         val userId = AndroidProcess.myUserHandle().hashCode()
+        Log.i(
+            TAG,
+            "setRealNetworkTypeLock: ratMode=$ratMode, bitmask=$networkTypeBitmask, legacyMode=$legacyNetworkMode, subId=$subId, userId=$userId"
+        )
 
         if (isShizukuAvailable()) {
             val applySettingsCmd = buildString {
@@ -88,7 +119,8 @@ class RealModemController(private val context: Context) {
             }
 
             val phoneOk = runShizukuShellCommand(cmdPhoneAttempt)
-            runShizukuShellCommand(applySettingsCmd)
+            val settingsOk = runShizukuShellCommand(applySettingsCmd)
+            Log.i(TAG, "Shizuku results: phoneOk=$phoneOk, settingsOk=$settingsOk")
 
             if (phoneOk) {
                 return
@@ -96,11 +128,13 @@ class RealModemController(private val context: Context) {
         }
 
         try {
+            Log.i(TAG, "Fallback to TelephonyManager.setAllowedNetworkTypesForReason($networkTypeBitmask)")
             telephonyManager.setAllowedNetworkTypesForReason(
                 TelephonyManager.ALLOWED_NETWORK_TYPES_REASON_USER,
                 networkTypeBitmask
             )
         } catch (e: SecurityException) {
+            Log.w(TAG, "SecurityException in setAllowedNetworkTypesForReason: ${e.message}")
             openDeviceNetworkSettings()
         }
     }
@@ -108,6 +142,7 @@ class RealModemController(private val context: Context) {
     fun setRealAirplaneMode(enable: Boolean) {
         val state = if (enable) 1 else 0
         val boolStr = if (enable) "enable" else "disable"
+        Log.i(TAG, "setRealAirplaneMode: enable=$enable, state=$state")
 
         if (isShizukuAvailable()) {
             val cmd = "cmd connectivity airplane-mode $boolStr || (settings put global airplane_mode_on $state && am broadcast -a android.intent.action.AIRPLANE_MODE --ez state $enable)"
@@ -125,6 +160,7 @@ class RealModemController(private val context: Context) {
             }
             context.sendBroadcast(intent)
         } catch (e: SecurityException) {
+            Log.w(TAG, "SecurityException in setRealAirplaneMode: ${e.message}")
             val intent = Intent(Settings.ACTION_AIRPLANE_MODE_SETTINGS).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
             }
@@ -133,6 +169,7 @@ class RealModemController(private val context: Context) {
     }
 
     fun openDeviceNetworkSettings() {
+        Log.i(TAG, "openDeviceNetworkSettings")
         val intent = Intent(Settings.ACTION_NETWORK_OPERATOR_SETTINGS).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
         }
