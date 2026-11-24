@@ -24,7 +24,13 @@ class ModemTelemetryEngine(
         context.getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
     private val executor = Executors.newSingleThreadExecutor()
     private val mainHandler = Handler(Looper.getMainLooper())
-    private var lastServingPci: Int = -1
+    private val prefs = context.getSharedPreferences("rtmonitor_telemetry_prefs", Context.MODE_PRIVATE)
+    private var lastServingPci: Int = prefs.getInt("last_serving_pci", -1)
+
+    fun resetPersistedHandoverState() {
+        lastServingPci = -1
+        prefs.edit().remove("last_serving_pci").apply()
+    }
 
     @SuppressLint("MissingPermission")
     fun startListening() {
@@ -132,6 +138,9 @@ class ModemTelemetryEngine(
                         servingJson.put("handoverOccurred", false)
                     }
                     lastServingPci = currentPci
+                    if (currentPci != -1) {
+                        prefs.edit().putInt("last_serving_pci", currentPci).apply()
+                    }
                     Log.d(
                         TAG,
                         "Serving cell: tech=${servingJson.optString("tech")} pci=${servingJson.optInt("pci")} rsrp=${servingJson.opt("rsrp")} sinr=${servingJson.opt("sinr")}"
