@@ -12,14 +12,19 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Extract ZIP
+      - name: Extract ZIP if present
         run: |
           ZIP_FILE=$(ls *.zip 2>/dev/null | head -n 1 || true)
           if [ -n "$ZIP_FILE" ]; then
             echo "Extracting $ZIP_FILE"
-            unzip -o "$ZIP_FILE"
-          else
-            echo "No ZIP file found, using repository files directly"
+            mkdir -p _zip_tmp
+            unzip -o "$ZIP_FILE" -d _zip_tmp
+            if [ -d "_zip_tmp/CellularRTMonitor_Android_Project_v4_1" ]; then
+              cp -rf _zip_tmp/CellularRTMonitor_Android_Project_v4_1/. .
+            else
+              cp -rf _zip_tmp/. .
+            fi
+            rm -rf _zip_tmp
           fi
 
       - name: Restore Persistent Keystore
