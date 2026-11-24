@@ -28,7 +28,11 @@ jobs:
         run: |
           if [ -n "$KEYSTORE_B64" ]; then
             echo "$KEYSTORE_B64" | base64 -d > "$HOME/rtmonitor-release.jks"
+            ls -lh "$HOME/rtmonitor-release.jks"
             echo "KS_FILE_PATH=$HOME/rtmonitor-release.jks" >> $GITHUB_ENV
+          else
+            echo "ERROR: KEYSTORE_B64 secret is empty"
+            exit 1
           fi
 
       - name: Set up JDK 17
