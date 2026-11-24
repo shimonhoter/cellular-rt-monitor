@@ -1394,11 +1394,16 @@ ${sampledRows.join('\n')}`;
   }
 
   function refreshAllViews() {
-    const fnNames = ["updateLiveUI", "renderLogs", "renderHistory", "renderChart", "drawChart", "updateStats", "renderAll"];
-    for (const name of fnNames) {
-      try {
-        if (typeof window[name] === "function") window[name]();
-      } catch (e) {}
+      const fnNames = ["updateLiveUI", "renderLogs", "renderHistory", "renderLiveChart", "renderChart", "drawChart", "updateStats", "renderAll"];
+      for (const name of fnNames) {
+        try {
+          if (typeof window[name] === "function") window[name]();
+        } catch (e) {}
+      }
+      try { if (typeof updateLiveUI === "function") updateLiveUI(); } catch (e) {}
+      try { if (typeof renderLogs === "function") renderLogs(); } catch (e) {}
+      try { if (typeof renderLiveChart === "function") renderLiveChart(); } catch (e) {}
+    } catch (e) {}
     }
   }
 
