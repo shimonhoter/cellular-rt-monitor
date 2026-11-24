@@ -15,11 +15,30 @@ android {
         versionName = "4.1.9"
     }
 
+    signingConfigs {
+        create("persistentDebug") {
+            val ksFile = file(System.getenv("KS_FILE_PATH") ?: "${System.getProperty("user.home")}/rtmonitor-release.jks")
+            if (ksFile.exists()) {
+                storeFile = ksFile
+                storePassword = System.getenv("KEYSTORE_PASS") ?: "RtMonitorKey2026!"
+                keyAlias = System.getenv("KEY_ALIAS") ?: "rtmonitor_key"
+                keyPassword = System.getenv("KEY_PASS") ?: "RtMonitorKey2026!"
+            }
+        }
+    }
+
     buildTypes {
+        debug {
+            val cfg = signingConfigs.findByName("persistentDebug")
+            if (cfg?.storeFile?.exists() == true) {
+                signingConfig = cfg
+            }
+        }
         release {
             isMinifyEnabled = false
         }
     }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
