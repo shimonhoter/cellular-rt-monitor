@@ -33,6 +33,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var modemController: RealModemController
     private val pollingHandler = Handler(Looper.getMainLooper())
     private val SHIZUKU_CODE = 1001
+    private var allowExitApp = false
+    private var shizukuPromptShownOnce = false
     private var fileUploadCallback: ValueCallback<Array<Uri>>? = null
 
     private val fileChooserLauncher = registerForActivityResult(
@@ -289,6 +291,24 @@ class MainActivity : AppCompatActivity() {
             }
         }
         pollingHandler.post(pollRunnable)
+    }
+
+
+    @Deprecated("Deprecated in Java")
+    override fun onBackPressed() {
+        if (allowExitApp) {
+            super.onBackPressed()
+        } else {
+            Toast.makeText(this, "יציאה אפשרית רק דרך כפתור היציאה באפליקציה", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    override fun finish() {
+        if (allowExitApp) {
+            super.finish()
+        } else {
+            Toast.makeText(this, "סגירה חיצונית חסומה — השתמש בכפתור היציאה באפליקציה", Toast.LENGTH_SHORT).show()
+        }
     }
 
     override fun onDestroy() {

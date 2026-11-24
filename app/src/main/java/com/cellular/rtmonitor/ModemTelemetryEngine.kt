@@ -103,6 +103,28 @@ class ModemTelemetryEngine(
         }
     }
 
+    
+    @SuppressLint("MissingPermission", "HardwareIds")
+    private fun resolveDeviceImsi(): String {
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                val subMgr = context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE) as? android.telephony.SubscriptionManager
+                val activeSub = subMgr?.activeSubscriptionInfoList?.firstOrNull()
+                if (activeSub != null) {
+                    val tmForSub = telephonyManager.createForSubscriptionId(activeSub.subscriptionId)
+                    val imsiSub = tmForSub.subscriberId
+                    if (!imsiSub.isNullOrBlank()) return imsiSub
+                }
+            }
+            val imsiDirect = telephonyManager.subscriberId
+            if (!imsiDirect.isNullOrBlank()) imsiDirect else "N/A"
+        } catch (_: SecurityException) {
+            "Restricted/NoPerm"
+        } catch (_: Exception) {
+            "N/A"
+        }
+    }
+
     @SuppressLint("MissingPermission")
     fun collectAndEmitTelemetry(cachedCellList: List<CellInfo>? = null) {
         try {
@@ -120,6 +142,7 @@ class ModemTelemetryEngine(
 
             val payload = JSONObject()
             payload.put("plmn", formattedPlmn)
+            payload.put("imsi", resolveDeviceImsi())
             payload.put("timestamp", System.currentTimeMillis())
 
             val neighborsArray = JSONArray()

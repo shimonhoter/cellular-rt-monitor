@@ -1552,5 +1552,177 @@ ${sampledRows.join('\n')}`;
 })();
 </script>
 
+<script id="rt-imsi-band-shizuku-exit">
+// [RT_IMSI_BAND_SHIZUKU_EXIT_V1]
+(function() {
+  const BAND_RANGES = {
+    "B1": "2100 MHz (1920-2170 MHz)",
+    "B2": "1900 MHz (1850-1990 MHz)",
+    "B3": "1800 MHz (1710-1880 MHz)",
+    "B4": "AWS-1 (1700/2100 MHz)",
+    "B5": "850 MHz (824-894 MHz)",
+    "B7": "2600 MHz (2500-2690 MHz)",
+    "B8": "900 MHz (880-960 MHz)",
+    "B12": "700 MHz (699-716 MHz)",
+    "B13": "700 MHz (746-787 MHz)",
+    "B20": "800 MHz DD (791-862 MHz)",
+    "B28": "700 MHz APT (703-803 MHz)",
+    "B38": "2600 MHz TDD (2570-2620 MHz)",
+    "B40": "2300 MHz TDD (2300-2400 MHz)",
+    "B41": "2500 MHz TDD (2496-2690 MHz)",
+    "B66": "AWS-3 (1710-2200 MHz)",
+    "n1": "2100 MHz NR (1920-2170 MHz)",
+    "n3": "1800 MHz NR (1710-1880 MHz)",
+    "n7": "2600 MHz NR (2500-2690 MHz)",
+    "n28": "700 MHz NR (703-803 MHz)",
+    "n41": "2500 MHz NR (2496-2690 MHz)",
+    "n77": "3700 MHz C-Band (3300-4200 MHz)",
+    "n78": "3500 MHz C-Band (3300-3800 MHz)"
+  };
+
+  function formatBandWithRange(rawBand) {
+    if (!rawBand || rawBand === "---") return "---";
+    const s = String(rawBand).trim();
+    if (s.includes("(") && s.includes(")")) return s;
+    const parts = s.split("+").map(x => x.trim()).filter(Boolean);
+    const enriched = parts.map(code => {
+      const cleanCode = code.replace(/^LTE\s*/i, "").trim();
+      const range = BAND_RANGES[cleanCode] || BAND_RANGES[code];
+      return range ? `${code} (${range})` : code;
+    });
+    return enriched.join(" + ");
+  }
+
+  function appendLogSafe(category, title, summary) {
+    try {
+      if (window.state && Array.isArray(window.state.logs)) {
+        const now = new Date();
+        const ts = now.toTimeString().split(" ")[0];
+        window.state.logs.unshift({
+          timestamp: ts,
+          category: category || "SYS",
+          title: title || "",
+          summary: summary || ""
+        });
+        if (window.state.logs.length > 500) window.state.logs.length = 500;
+        if (typeof renderLogs === "function") renderLogs();
+      }
+    } catch (e) {}
+  }
+
+  function ensureImsiBadge() {
+    if (document.getElementById("rt-imsi-readout")) return;
+    const box = document.createElement("div");
+    box.id = "rt-imsi-readout";
+    box.style.cssText = "margin:8px 0;padding:8px 12px;border-radius:8px;background:#0f172a;border:1px solid #334155;color:#e2e8f0;font-size:12px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;";
+    box.innerHTML = '<span><strong>IMSI:</strong> <span id="rt-imsi-value">ממתין לנתוני מודם...</span></span><span id="rt-band-range-value" style="color:#38bdf8;"></span>';
+    const mainEl = document.querySelector("main") || document.body.firstElementChild;
+    if (mainEl && mainEl.parentNode) {
+      mainEl.parentNode.insertBefore(box, mainEl);
+    } else {
+      document.body.prepend(box);
+    }
+  }
+
+  function ensureExitButton() {
+    if (document.getElementById("rt-exit-app-btn")) return;
+    const btn = document.createElement("button");
+    btn.id = "rt-exit-app-btn";
+    btn.type = "button";
+    btn.textContent = "יציאה מהאפליקציה";
+    btn.style.cssText = "position:fixed;bottom:14px;left:14px;z-index:9999;padding:8px 14px;border-radius:8px;background:#dc2626;color:#ffffff;font-weight:bold;font-size:12px;border:none;box-shadow:0 4px 12px rgba(0,0,0,0.4);";
+    btn.addEventListener("click", function() {
+      appendLogSafe("SYS", "יציאה יזומה", "המשתמש לחץ על כפתור היציאה באפליקציה");
+      try {
+        if (window.AndroidModem && typeof window.AndroidModem.exitApp === "function") {
+          window.AndroidModem.exitApp();
+          return;
+        }
+      } catch (e) {}
+      try { window.close(); } catch (e) {}
+    });
+    document.body.appendChild(btn);
+  }
+
+  let shizukuShownThisLaunch = false;
+  function guardShizukuModal() {
+    const candidates = Array.from(document.querySelectorAll("div, section, dialog, [role='dialog']"));
+    for (const el of candidates) {
+      const txt = (el.textContent || "").toLowerCase();
+      if (txt.includes("shizuku")) {
+        const style = window.getComputedStyle(el);
+        const isVisible = style.display !== "none" && style.visibility !== "hidden" && parseFloat(style.opacity || "1") > 0;
+        if (isVisible) {
+          if (!shizukuShownThisLaunch) {
+            shizukuShownThisLaunch = true;
+            appendLogSafe("SYS", "Shizuku", "חלון הנחיות Shizuku הוצג בפתיחת האפליקציה");
+          } else {
+            el.style.display = "none";
+            el.setAttribute("aria-hidden", "true");
+          }
+        }
+      }
+    }
+  }
+
+  let lastLoggedImsi = "";
+  let lastLoggedBandRange = "";
+
+  function applyBandAndImsiUpdates(incoming) {
+    ensureImsiBadge();
+    ensureExitButton();
+    const st = window.state || {};
+    const sc = (incoming && incoming.servingCell) || st.servingCell || {};
+    const rawBand = sc.band || "";
+    const bandWithRange = formatBandWithRange(rawBand);
+    if (bandWithRange && bandWithRange !== "---") {
+      if (st.servingCell) st.servingCell.band = bandWithRange;
+      const bandEl = document.getElementById("rt-band-range-value");
+      if (bandEl) bandEl.textContent = "Band: " + bandWithRange;
+      if (bandWithRange !== lastLoggedBandRange) {
+        lastLoggedBandRange = bandWithRange;
+        appendLogSafe("RF", "Band & Frequency", "תדר Band מעודכן: " + bandWithRange);
+      }
+    }
+
+    const imsiVal = (incoming && incoming.imsi) || st.imsi || "N/A";
+    st.imsi = imsiVal;
+    const imsiEl = document.getElementById("rt-imsi-value");
+    if (imsiEl) imsiEl.textContent = imsiVal;
+    if (imsiVal && imsiVal !== "N/A" && imsiVal !== lastLoggedImsi) {
+      lastLoggedImsi = imsiVal;
+      appendLogSafe("SYS", "IMSI", "IMSI זוהה: " + imsiVal);
+    }
+  }
+
+  function wrapModemCallback() {
+    if (typeof window.onRealModemData === "function" && !window.onRealModemData._rtImsiBandWrapped) {
+      const orig = window.onRealModemData;
+      const wrapped = function(data) {
+        const res = orig.apply(this, arguments);
+        applyBandAndImsiUpdates(data);
+        guardShizukuModal();
+        return res;
+      };
+      wrapped._rtImsiBandWrapped = true;
+      window.onRealModemData = wrapped;
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", function() {
+    ensureImsiBadge();
+    ensureExitButton();
+    wrapModemCallback();
+    applyBandAndImsiUpdates(null);
+    setTimeout(guardShizukuModal, 250);
+  });
+
+  setInterval(function() {
+    wrapModemCallback();
+    applyBandAndImsiUpdates(null);
+    guardShizukuModal();
+  }, 1000);
+})();
+</script>
 </body>
 </html>
