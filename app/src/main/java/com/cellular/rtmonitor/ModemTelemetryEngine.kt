@@ -109,19 +109,22 @@ class ModemTelemetryEngine(
         return try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 val subMgr = context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE) as? android.telephony.SubscriptionManager
-                val activeSub = subMgr?.activeSubscriptionInfoList?.firstOrNull()
-                if (activeSub != null) {
-                    val tmForSub = telephonyManager.createForSubscriptionId(activeSub.subscriptionId)
-                    val imsiSub = tmForSub.subscriberId
-                    if (!imsiSub.isNullOrBlank()) return imsiSub
+                val subId = android.telephony.SubscriptionManager.getDefaultDataSubscriptionId().let {
+                    if (it != android.telephony.SubscriptionManager.INVALID_SUBSCRIPTION_ID) it
+                    else subMgr?.activeSubscriptionInfoList?.firstOrNull()?.subscriptionId ?: -1
+                }
+                if (subId != -1) {
+                    val tmSub = telephonyManager.createForSubscriptionId(subId)
+                    val sId = tmSub.subscriberId
+                    if (!sId.isNullOrBlank()) return sId
                 }
             }
-            val imsiDirect = telephonyManager.subscriberId
-            if (!imsiDirect.isNullOrBlank()) imsiDirect else "N/A"
+            val direct = telephonyManager.subscriberId
+            if (!direct.isNullOrBlank()) direct else "Unavailable"
         } catch (_: SecurityException) {
-            "Restricted/NoPerm"
+            "Restricted (No Permission)"
         } catch (_: Exception) {
-            "N/A"
+            "Unavailable"
         }
     }
 

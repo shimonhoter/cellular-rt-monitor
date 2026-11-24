@@ -34,7 +34,6 @@ class MainActivity : AppCompatActivity() {
     private val pollingHandler = Handler(Looper.getMainLooper())
     private val SHIZUKU_CODE = 1001
     private var allowExitApp = false
-    private var shizukuPromptShownOnce = false
     private var fileUploadCallback: ValueCallback<Array<Uri>>? = null
 
     private val fileChooserLauncher = registerForActivityResult(

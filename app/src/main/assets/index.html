@@ -435,6 +435,7 @@
             activeRat: '4G',
             sampleCount: 0,
             hoCount: 0,
+            imsi: '---',
             logFilter: 'ALL',
             servingCell: {
                 tech: '---', band: '---', plmn: 'ממתין להרשאות/מודם',
@@ -502,16 +503,22 @@
             if (window.AndroidModem && window.AndroidModem.openShizukuApp) window.AndroidModem.openShizukuApp();
         }
 
+        let _rtShizukuInitialPromptHandled = false;
         window.onShizukuStatus = function(isRunning) {
             const btn = document.getElementById('btn-shizuku-status');
             if (isRunning) {
                 btn.className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40';
                 btn.textContent = '⚡ Shizuku פעיל';
                 closeShizukuModal();
+                _rtShizukuInitialPromptHandled = true;
             } else {
                 btn.className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40';
                 btn.textContent = '⚡ הפעל Shizuku';
-                openShizukuModal();
+                if (!_rtShizukuInitialPromptHandled) {
+                    _rtShizukuInitialPromptHandled = true;
+                    openShizukuModal();
+                    addLog('SYS', 'SHIZUKU', 'חלון הנחיות Shizuku הוצג בפתיחת האפליקציה');
+                }
             }
         };
 
@@ -613,9 +620,20 @@
                     showToast('מעבר תחנת בסיס (Handover)', hoMsg, 'ho');
                 }
 
+                const enrichedBand = formatBandWithRange(sc.band);
+                if (enrichedBand && enrichedBand !== '---') {
+                    sc.band = enrichedBand;
+                }
+                if (data.imsi && data.imsi !== state.imsi) {
+                    state.imsi = data.imsi;
+                    addLog('SYS', 'IMSI', `IMSI: ${state.imsi}`, `Subscriber ID: ${state.imsi}`);
+                }
                 state.activeRat = sc.rat || '4G';
                 state.servingCell.plmn = sc.plmn || state.servingCell.plmn;
                 state.servingCell.tech = sc.tech || state.servingCell.tech;
+                if (sc.band && sc.band !== state.servingCell.band) {
+                    addLog('RF', 'BAND', `${sc.tech || state.activeRat} Band: ${sc.band}`, `Active band & frequency range`);
+                }
                 state.servingCell.band = sc.band || state.servingCell.band;
                 if (sc.pci !== undefined && sc.pci >= 0) state.servingCell.pci = sc.pci;
                 if (sc.gnb !== undefined && sc.gnb >= 0) state.servingCell.gnb = sc.gnb;
@@ -680,6 +698,8 @@
             document.getElementById('cell-tac').textContent = state.servingCell.tac;
             document.getElementById('cell-bw').textContent = state.servingCell.band;
             document.getElementById('cell-ta').textContent = state.servingCell.ta > 0 ? `${state.servingCell.ta} (~${state.servingCell.ta * 15}m)` : '0';
+            const imsiCellEl = document.getElementById('rt-inline-imsi');
+            if (imsiCellEl) imsiCellEl.textContent = state.imsi || '---';
 
             if (state.activeRat === '3G') {
                 document.getElementById('kpi1-name').textContent = 'RSCP';
@@ -1552,10 +1572,10 @@ ${sampledRows.join('\n')}`;
 })();
 </script>
 
-<script id="rt-imsi-band-shizuku-exit">
-// [RT_IMSI_BAND_SHIZUKU_EXIT_V1]
+<script id="rt-core-band-imsi-exit">
+// [RT_CORE_BAND_IMSI_EXIT_V2]
 (function() {
-  const BAND_RANGES = {
+  const BAND_FREQ = {
     "B1": "2100 MHz (1920-2170 MHz)",
     "B2": "1900 MHz (1850-1990 MHz)",
     "B3": "1800 MHz (1710-1880 MHz)",
@@ -1580,148 +1600,58 @@ ${sampledRows.join('\n')}`;
     "n78": "3500 MHz C-Band (3300-3800 MHz)"
   };
 
-  function formatBandWithRange(rawBand) {
+  window.formatBandWithRange = function(rawBand) {
     if (!rawBand || rawBand === "---") return "---";
-    const s = String(rawBand).trim();
-    if (s.includes("(") && s.includes(")")) return s;
-    const parts = s.split("+").map(x => x.trim()).filter(Boolean);
-    const enriched = parts.map(code => {
-      const cleanCode = code.replace(/^LTE\s*/i, "").trim();
-      const range = BAND_RANGES[cleanCode] || BAND_RANGES[code];
-      return range ? `${code} (${range})` : code;
-    });
-    return enriched.join(" + ");
-  }
+    const str = String(rawBand).trim();
+    if (str.includes("(") && str.includes(")")) return str;
+    return str.split("+").map(part => {
+      const p = part.trim();
+      const key = p.replace(/^LTE\s*/i, "").trim();
+      const freq = BAND_FREQ[key] || BAND_FREQ[p];
+      return freq ? `${p} (${freq})` : p;
+    }).join(" + ");
+  };
 
-  function appendLogSafe(category, title, summary) {
-    try {
-      if (window.state && Array.isArray(window.state.logs)) {
-        const now = new Date();
-        const ts = now.toTimeString().split(" ")[0];
-        window.state.logs.unshift({
-          timestamp: ts,
-          category: category || "SYS",
-          title: title || "",
-          summary: summary || ""
-        });
-        if (window.state.logs.length > 500) window.state.logs.length = 500;
-        if (typeof renderLogs === "function") renderLogs();
+  function mountInlineImsiAndExitBtn() {
+    if (!document.getElementById("rt-inline-imsi-row")) {
+      const bandSpan = document.getElementById("cell-band");
+      const container = bandSpan ? bandSpan.closest("div.grid, div.space-y-2, div.flex-col") || bandSpan.parentElement : null;
+      const row = document.createElement("div");
+      row.id = "rt-inline-imsi-row";
+      row.style.cssText = "margin-top:6px;padding:6px 10px;border-radius:6px;background:rgba(15,23,42,0.85);border:1px solid #334155;font-size:12px;color:#e2e8f0;display:flex;justify-content:space-between;align-items:center;";
+      row.innerHTML = '<span><strong>IMSI:</strong> <span id="rt-inline-imsi" style="color:#38bdf8;">' + ((window.state && window.state.imsi) || "---") + '</span></span>';
+      if (container && container.parentNode) {
+        container.parentNode.insertBefore(row, container.nextSibling);
+      } else {
+        document.body.prepend(row);
       }
-    } catch (e) {}
-  }
-
-  function ensureImsiBadge() {
-    if (document.getElementById("rt-imsi-readout")) return;
-    const box = document.createElement("div");
-    box.id = "rt-imsi-readout";
-    box.style.cssText = "margin:8px 0;padding:8px 12px;border-radius:8px;background:#0f172a;border:1px solid #334155;color:#e2e8f0;font-size:12px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;";
-    box.innerHTML = '<span><strong>IMSI:</strong> <span id="rt-imsi-value">ממתין לנתוני מודם...</span></span><span id="rt-band-range-value" style="color:#38bdf8;"></span>';
-    const mainEl = document.querySelector("main") || document.body.firstElementChild;
-    if (mainEl && mainEl.parentNode) {
-      mainEl.parentNode.insertBefore(box, mainEl);
-    } else {
-      document.body.prepend(box);
     }
-  }
 
-  function ensureExitButton() {
-    if (document.getElementById("rt-exit-app-btn")) return;
-    const btn = document.createElement("button");
-    btn.id = "rt-exit-app-btn";
-    btn.type = "button";
-    btn.textContent = "יציאה מהאפליקציה";
-    btn.style.cssText = "position:fixed;bottom:14px;left:14px;z-index:9999;padding:8px 14px;border-radius:8px;background:#dc2626;color:#ffffff;font-weight:bold;font-size:12px;border:none;box-shadow:0 4px 12px rgba(0,0,0,0.4);";
-    btn.addEventListener("click", function() {
-      appendLogSafe("SYS", "יציאה יזומה", "המשתמש לחץ על כפתור היציאה באפליקציה");
-      try {
-        if (window.AndroidModem && typeof window.AndroidModem.exitApp === "function") {
-          window.AndroidModem.exitApp();
-          return;
-        }
-      } catch (e) {}
-      try { window.close(); } catch (e) {}
-    });
-    document.body.appendChild(btn);
-  }
-
-  let shizukuShownThisLaunch = false;
-  function guardShizukuModal() {
-    const candidates = Array.from(document.querySelectorAll("div, section, dialog, [role='dialog']"));
-    for (const el of candidates) {
-      const txt = (el.textContent || "").toLowerCase();
-      if (txt.includes("shizuku")) {
-        const style = window.getComputedStyle(el);
-        const isVisible = style.display !== "none" && style.visibility !== "hidden" && parseFloat(style.opacity || "1") > 0;
-        if (isVisible) {
-          if (!shizukuShownThisLaunch) {
-            shizukuShownThisLaunch = true;
-            appendLogSafe("SYS", "Shizuku", "חלון הנחיות Shizuku הוצג בפתיחת האפליקציה");
-          } else {
-            el.style.display = "none";
-            el.setAttribute("aria-hidden", "true");
+    if (!document.getElementById("rt-explicit-exit-btn")) {
+      const exitBtn = document.createElement("button");
+      exitBtn.id = "rt-explicit-exit-btn";
+      exitBtn.type = "button";
+      exitBtn.textContent = "יציאה";
+      exitBtn.style.cssText = "position:fixed;bottom:14px;left:14px;z-index:9999;padding:8px 16px;border-radius:8px;background:#b91c1c;color:#ffffff;font-weight:700;font-size:12px;border:1px solid #f87171;";
+      exitBtn.addEventListener("click", function() {
+        try { if (typeof addLog === "function") addLog("SYS", "EXIT", "יציאה דרך כפתור היציאה באפליקציה"); } catch (e) {}
+        try {
+          if (window.AndroidModem && typeof window.AndroidModem.exitApp === "function") {
+            window.AndroidModem.exitApp();
+            return;
           }
-        }
-      }
+        } catch (e) {}
+        try { window.close(); } catch (e) {}
+      });
+      document.body.appendChild(exitBtn);
     }
   }
 
-  let lastLoggedImsi = "";
-  let lastLoggedBandRange = "";
-
-  function applyBandAndImsiUpdates(incoming) {
-    ensureImsiBadge();
-    ensureExitButton();
-    const st = window.state || {};
-    const sc = (incoming && incoming.servingCell) || st.servingCell || {};
-    const rawBand = sc.band || "";
-    const bandWithRange = formatBandWithRange(rawBand);
-    if (bandWithRange && bandWithRange !== "---") {
-      if (st.servingCell) st.servingCell.band = bandWithRange;
-      const bandEl = document.getElementById("rt-band-range-value");
-      if (bandEl) bandEl.textContent = "Band: " + bandWithRange;
-      if (bandWithRange !== lastLoggedBandRange) {
-        lastLoggedBandRange = bandWithRange;
-        appendLogSafe("RF", "Band & Frequency", "תדר Band מעודכן: " + bandWithRange);
-      }
-    }
-
-    const imsiVal = (incoming && incoming.imsi) || st.imsi || "N/A";
-    st.imsi = imsiVal;
-    const imsiEl = document.getElementById("rt-imsi-value");
-    if (imsiEl) imsiEl.textContent = imsiVal;
-    if (imsiVal && imsiVal !== "N/A" && imsiVal !== lastLoggedImsi) {
-      lastLoggedImsi = imsiVal;
-      appendLogSafe("SYS", "IMSI", "IMSI זוהה: " + imsiVal);
-    }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", mountInlineImsiAndExitBtn);
+  } else {
+    mountInlineImsiAndExitBtn();
   }
-
-  function wrapModemCallback() {
-    if (typeof window.onRealModemData === "function" && !window.onRealModemData._rtImsiBandWrapped) {
-      const orig = window.onRealModemData;
-      const wrapped = function(data) {
-        const res = orig.apply(this, arguments);
-        applyBandAndImsiUpdates(data);
-        guardShizukuModal();
-        return res;
-      };
-      wrapped._rtImsiBandWrapped = true;
-      window.onRealModemData = wrapped;
-    }
-  }
-
-  document.addEventListener("DOMContentLoaded", function() {
-    ensureImsiBadge();
-    ensureExitButton();
-    wrapModemCallback();
-    applyBandAndImsiUpdates(null);
-    setTimeout(guardShizukuModal, 250);
-  });
-
-  setInterval(function() {
-    wrapModemCallback();
-    applyBandAndImsiUpdates(null);
-    guardShizukuModal();
-  }, 1000);
 })();
 </script>
 </body>
