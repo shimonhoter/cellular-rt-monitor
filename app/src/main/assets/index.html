@@ -1632,18 +1632,97 @@ ${sampledRows.join('\n')}`;
       exitBtn.id = "rt-explicit-exit-btn";
       exitBtn.type = "button";
       exitBtn.textContent = "יציאה";
-      exitBtn.style.cssText = "position:fixed;bottom:14px;left:14px;z-index:9999;padding:8px 16px;border-radius:8px;background:#b91c1c;color:#ffffff;font-weight:700;font-size:12px;border:1px solid #f87171;";
+      exitBtn.style.cssText = "padding:6px 14px;border-radius:8px;background:#b91c1c;color:#ffffff;font-weight:700;font-size:12px;border:1px solid #f87171;flex-shrink:0;cursor:pointer;";
+
+      const imsiRow = document.getElementById("rt-inline-imsi-row");
+      const topBarCandidate =
+        document.querySelector("header .flex, header, nav .flex, nav") ||
+        (imsiRow ? imsiRow.parentElement : null);
+
+      if (imsiRow && imsiRow.parentNode) {
+        const actionStrip = document.createElement("div");
+        actionStrip.id = "rt-exit-action-strip";
+        actionStrip.style.cssText = "display:flex;justify-content:flex-end;align-items:center;margin:6px 0 8px 0;";
+        actionStrip.appendChild(exitBtn);
+        if (imsiRow.nextSibling) {
+          imsiRow.parentNode.insertBefore(actionStrip, imsiRow.nextSibling);
+        } else {
+          imsiRow.parentNode.appendChild(actionStrip);
+        }
+      } else if (topBarCandidate) {
+        topBarCandidate.appendChild(exitBtn);
+      } else {
+        document.body.prepend(exitBtn);
+      }
+
+      window.rtPersistFullStateNow = function() {
+        try {
+          const st = window.state || {};
+          const snapshot = {
+            sampleCount: st.sampleCount ?? 0,
+            hoCount: st.hoCount ?? 0,
+            imsi: st.imsi ?? "",
+            servingCell: st.servingCell ?? null,
+            rf: st.rf ?? null,
+            neighbors: st.neighbors ?? [],
+            history: st.history ?? [],
+            liveSamples: st.liveSamples ?? [],
+            logs: st.logs ?? [],
+            savedAt: Date.now()
+          };
+          const serialized = JSON.stringify(snapshot);
+          try { localStorage.setItem("rt_persistent_state_backup", serialized); } catch (_e) {}
+          if (window.AndroidModem && typeof window.AndroidModem.saveStateToDevice === "function") {
+            window.AndroidModem.saveStateToDevice(serialized);
+          }
+        } catch (_e) {}
+      };
+
+      window.rtRestoreStateOnBoot = function() {
+        try {
+          let raw = "";
+          if (window.AndroidModem && typeof window.AndroidModem.loadStateFromDevice === "function") {
+            raw = window.AndroidModem.loadStateFromDevice() || "";
+          }
+          if (!raw || raw.trim() === "") {
+            try { raw = localStorage.getItem("rt_persistent_state_backup") || ""; } catch (_e) {}
+          }
+          if (raw && raw.trim() !== "") {
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === "object") {
+              window.state = window.state || {};
+              if (typeof parsed.sampleCount === "number") window.state.sampleCount = parsed.sampleCount;
+              if (typeof parsed.hoCount === "number") window.state.hoCount = parsed.hoCount;
+              if (parsed.imsi !== undefined) window.state.imsi = parsed.imsi;
+              if (parsed.servingCell !== undefined) window.state.servingCell = parsed.servingCell;
+              if (parsed.rf !== undefined) window.state.rf = parsed.rf;
+              if (Array.isArray(parsed.neighbors)) window.state.neighbors = parsed.neighbors;
+              if (Array.isArray(parsed.history)) window.state.history = parsed.history;
+              if (Array.isArray(parsed.liveSamples)) window.state.liveSamples = parsed.liveSamples;
+              if (Array.isArray(parsed.logs)) window.state.logs = parsed.logs;
+              const imsiEl = document.getElementById("rt-inline-imsi");
+              if (imsiEl && window.state.imsi) imsiEl.textContent = window.state.imsi;
+            }
+          }
+        } catch (_e) {}
+      };
+
+      window.rtRestoreStateOnBoot();
+      setInterval(function() {
+        try { if (typeof window.rtPersistFullStateNow === "function") window.rtPersistFullStateNow(); } catch (_e) {}
+      }, 3000);
+
       exitBtn.addEventListener("click", function() {
-        try { if (typeof addLog === "function") addLog("SYS", "EXIT", "יציאה דרך כפתור היציאה באפליקציה"); } catch (e) {}
+        try { if (typeof addLog === "function") addLog("SYS", "EXIT", "שמירת נתונים ויציאה מבוקרת מהאפליקציה"); } catch (_e) {}
+        try { if (typeof window.rtPersistFullStateNow === "function") window.rtPersistFullStateNow(); } catch (_e) {}
         try {
           if (window.AndroidModem && typeof window.AndroidModem.exitApp === "function") {
             window.AndroidModem.exitApp();
             return;
           }
-        } catch (e) {}
-        try { window.close(); } catch (e) {}
+        } catch (_e) {}
+        try { window.close(); } catch (_e) {}
       });
-      document.body.appendChild(exitBtn);
     }
   }
 
