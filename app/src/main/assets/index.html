@@ -1338,9 +1338,9 @@ ${sampledRows.join('\n')}`;
 
 
 <script id="rt-persistent-store">
-// [RT_PERSISTENT_STORE_V4]
+// [RT_PERSISTENT_STORE_V5_NATIVE]
 (function() {
-  const KEY = "rtmonitor_persistent_state_v4";
+  const KEY = "rtmonitor_persistent_state_v5";
   let manualResetInProgress = false;
 
   function getAppState() {
@@ -1384,12 +1384,40 @@ ${sampledRows.join('\n')}`;
     );
   }
 
+  function writeNative(payloadStr) {
+    try {
+      if (window.AndroidModem && typeof window.AndroidModem.saveStateToDevice === "function") {
+        window.AndroidModem.saveStateToDevice(payloadStr);
+      }
+    } catch (e) {}
+  }
+
+  function readNative() {
+    try {
+      if (window.AndroidModem && typeof window.AndroidModem.loadStateFromDevice === "function") {
+        const s = window.AndroidModem.loadStateFromDevice();
+        if (s && s.length > 2) return s;
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  function clearNative() {
+    try {
+      if (window.AndroidModem && typeof window.AndroidModem.clearStateOnDevice === "function") {
+        window.AndroidModem.clearStateOnDevice();
+      }
+    } catch (e) {}
+  }
+
   function saveNow() {
     if (manualResetInProgress) return;
     try {
       const snap = snapshotState();
       if (!hasData(snap)) return;
-      localStorage.setItem(KEY, JSON.stringify({ ts: Date.now(), state: snap }));
+      const payload = JSON.stringify({ ts: Date.now(), state: snap });
+      writeNative(payload);
+      try { localStorage.setItem(KEY, payload); } catch (e) {}
     } catch (e) {}
   }
 
@@ -1409,7 +1437,7 @@ ${sampledRows.join('\n')}`;
     if (manualResetInProgress) return;
     try {
       const st = getAppState();
-      const raw = localStorage.getItem(KEY) || localStorage.getItem("rtmonitor_persistent_state_v3") || localStorage.getItem("rtmonitor_persistent_state_v2") || localStorage.getItem("rtmonitor_persistent_state_v1");
+      const raw = readNative() || localStorage.getItem(KEY) || localStorage.getItem("rtmonitor_persistent_state_v4") || localStorage.getItem("rtmonitor_persistent_state_v3") || localStorage.getItem("rtmonitor_persistent_state_v2") || localStorage.getItem("rtmonitor_persistent_state_v1");
       if (!raw || !st) return;
       const parsed = JSON.parse(raw);
       const saved = parsed && parsed.state ? parsed.state : null;
@@ -1433,8 +1461,10 @@ ${sampledRows.join('\n')}`;
 
   window.rtManualResetAllData = function() {
     manualResetInProgress = true;
+    clearNative();
     try {
       localStorage.removeItem(KEY);
+      localStorage.removeItem("rtmonitor_persistent_state_v4");
       localStorage.removeItem("rtmonitor_persistent_state_v3");
       localStorage.removeItem("rtmonitor_persistent_state_v2");
       localStorage.removeItem("rtmonitor_persistent_state_v1");
@@ -1462,8 +1492,10 @@ ${sampledRows.join('\n')}`;
         btn.dataset.rtResetHooked = "1";
         btn.addEventListener("click", function() {
           manualResetInProgress = true;
+          clearNative();
           try {
             localStorage.removeItem(KEY);
+            localStorage.removeItem("rtmonitor_persistent_state_v4");
             localStorage.removeItem("rtmonitor_persistent_state_v3");
             localStorage.removeItem("rtmonitor_persistent_state_v2");
             localStorage.removeItem("rtmonitor_persistent_state_v1");
@@ -1474,11 +1506,26 @@ ${sampledRows.join('\n')}`;
     });
   }
 
+  function hookRealModemData() {
+    if (typeof window.onRealModemData === "function" && !window.onRealModemData._rtPersistedHook) {
+      const orig = window.onRealModemData;
+      const wrapped = function(data) {
+        const res = orig.apply(this, arguments);
+        saveNow();
+        return res;
+      };
+      wrapped._rtPersistedHook = true;
+      window.onRealModemData = wrapped;
+    }
+  }
+
   function runRestoreSequence() {
+    hookRealModemData();
     restoreNow();
     hookResetButtons();
     [100, 350, 800, 1600, 3000].forEach(function(ms) {
       setTimeout(function() {
+        hookRealModemData();
         restoreNow();
         hookResetButtons();
       }, ms);
@@ -1492,6 +1539,7 @@ ${sampledRows.join('\n')}`;
   }
   window.addEventListener("load", runRestoreSequence);
   setInterval(function() {
+    hookRealModemData();
     hookResetButtons();
     saveNow();
   }, 500);

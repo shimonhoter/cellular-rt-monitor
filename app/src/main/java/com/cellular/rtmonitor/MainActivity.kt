@@ -171,6 +171,37 @@ class MainActivity : AppCompatActivity() {
     }
 
     inner class WebAppInterface {
+
+                @JavascriptInterface
+                fun saveStateToDevice(jsonStr: String) {
+                    try {
+                        val f = File(filesDir, "rt_persistent_state.json")
+                        f.writeText(jsonStr, Charsets.UTF_8)
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+
+                @JavascriptInterface
+                fun loadStateFromDevice(): String {
+                    return try {
+                        val f = File(filesDir, "rt_persistent_state.json")
+                        if (f.exists()) f.readText(Charsets.UTF_8) else ""
+                    } catch (e: Exception) {
+                        ""
+                    }
+                }
+
+                @JavascriptInterface
+                fun clearStateOnDevice() {
+                    try {
+                        val f = File(filesDir, "rt_persistent_state.json")
+                        if (f.exists()) f.delete()
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+
         @JavascriptInterface
         fun setRatMode(ratMode: String) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
