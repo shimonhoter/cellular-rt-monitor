@@ -1601,8 +1601,8 @@ ${sampledRows.join('\n')}`;
 })();
 </script>
 
-<script id="rt-layout-inline-dbm">
-// [RT_LAYOUT_INLINE_DBM_V1]
+<script id="rt-core-band-imsi-exit">
+// [RT_CORE_BAND_IMSI_EXIT_V2]
 (function() {
   const BAND_FREQ = {
     "B1": "2100 MHz (1920-2170 MHz)",
@@ -1629,131 +1629,137 @@ ${sampledRows.join('\n')}`;
     "n78": "3500 MHz C-Band (3300-3800 MHz)"
   };
 
-  function formatBandWithRange(rawBand) {
+  window.formatBandWithRange = function(rawBand) {
     if (!rawBand || rawBand === "---") return "---";
-    const s = String(rawBand).trim();
-    if (s.includes("(") && s.includes(")")) return s;
-    return s.split("+").map(part => {
+    const str = String(rawBand).trim();
+    if (str.includes("(") && str.includes(")")) return str;
+    return str.split("+").map(part => {
       const p = part.trim();
       const key = p.replace(/^LTE\s*/i, "").trim();
       const freq = BAND_FREQ[key] || BAND_FREQ[p];
       return freq ? `${p} (${freq})` : p;
     }).join(" + ");
-  }
+  };
 
-  function fixRsrpInlineDbm() {
-    // Remove floating exit button if it duplicates header/top controls
-    const floatExit = document.getElementById("rt-explicit-exit-btn");
-    if (floatExit) floatExit.remove();
-
-    // Place IMSI cleanly inside serving cell container once
-    if (!document.getElementById("rt-serving-imsi-line")) {
-      const plmnEl = document.getElementById("cell-plmn");
-      const anchor = plmnEl ? plmnEl.closest("div") : null;
-      if (anchor && anchor.parentNode) {
-        const line = document.createElement("div");
-        line.id = "rt-serving-imsi-line";
-        line.className = "mt-1.5 px-2.5 py-1 rounded bg-slate-900/80 border border-slate-700/70 text-[11px] text-cyan-200 flex items-center justify-between";
-        line.innerHTML = '<span>IMSI: <span id="rt-serving-imsi-val" class="font-mono text-white">' + ((window.state && window.state.imsi) || "---") + '</span></span>';
-        anchor.parentNode.insertBefore(line, anchor.nextSibling);
+  function mountInlineImsiAndExitBtn() {
+    if (!document.getElementById("rt-inline-imsi-row")) {
+      const bandSpan = document.getElementById("cell-band");
+      const container = bandSpan ? bandSpan.closest("div.grid, div.space-y-2, div.flex-col") || bandSpan.parentElement : null;
+      const row = document.createElement("div");
+      row.id = "rt-inline-imsi-row";
+      row.style.cssText = "margin-top:6px;padding:6px 10px;border-radius:6px;background:rgba(15,23,42,0.85);border:1px solid #334155;font-size:12px;color:#e2e8f0;display:flex;justify-content:space-between;align-items:center;";
+      row.innerHTML = '<span><strong>IMSI:</strong> <span id="rt-inline-imsi" style="color:#38bdf8;">' + ((window.state && window.state.imsi) || "---") + '</span></span>';
+      if (container && container.parentNode) {
+        container.parentNode.insertBefore(row, container.nextSibling);
+      } else {
+        document.body.prepend(row);
       }
     }
-    const imsiValEl = document.getElementById("rt-serving-imsi-val");
-    if (imsiValEl && window.state && window.state.imsi) {
-      imsiValEl.textContent = window.state.imsi;
-    }
 
-    // Keep RSRP value and dBm on a single horizontal line (dBm to the right of the value)
-    const rsrpEl = document.getElementById("kpi-rsrp") || document.getElementById("rsrp-value");
-    if (rsrpEl && rsrpEl.parentElement) {
-      const parent = rsrpEl.parentElement;
-      parent.style.display = "flex";
-      parent.style.flexDirection = "row";
-      parent.style.alignItems = "baseline";
-      parent.style.justifyContent = "center";
-      parent.style.gap = "6px";
-      parent.style.whiteSpace = "nowrap";
-      rsrpEl.style.display = "inline";
+    if (!document.getElementById("rt-explicit-exit-btn")) {
+      const exitBtn = document.createElement("button");
+      exitBtn.id = "rt-explicit-exit-btn";
+      exitBtn.type = "button";
+      exitBtn.textContent = "יציאה";
+      exitBtn.style.cssText = "padding:6px 14px;border-radius:8px;background:#b91c1c;color:#ffffff;font-weight:700;font-size:12px;border:1px solid #f87171;flex-shrink:0;cursor:pointer;";
 
-      let unitSpan = parent.querySelector("[data-rt-inline-dbm='1']");
-      if (!unitSpan) {
-        Array.from(parent.childNodes).forEach(node => {
-          if (node !== rsrpEl && node.textContent && node.textContent.trim() === "dBm") {
-            node.remove();
+      const imsiRow = document.getElementById("rt-inline-imsi-row");
+      const topBarCandidate =
+        document.querySelector("header .flex, header, nav .flex, nav") ||
+        (imsiRow ? imsiRow.parentElement : null);
+
+      if (imsiRow && imsiRow.parentNode) {
+        const actionStrip = document.createElement("div");
+        actionStrip.id = "rt-exit-action-strip";
+        actionStrip.style.cssText = "display:flex;justify-content:flex-end;align-items:center;margin:6px 0 8px 0;";
+        actionStrip.appendChild(exitBtn);
+        if (imsiRow.nextSibling) {
+          imsiRow.parentNode.insertBefore(actionStrip, imsiRow.nextSibling);
+        } else {
+          imsiRow.parentNode.appendChild(actionStrip);
+        }
+      } else if (topBarCandidate) {
+        topBarCandidate.appendChild(exitBtn);
+      } else {
+        document.body.prepend(exitBtn);
+      }
+
+      window.rtPersistFullStateNow = function() {
+        try {
+          const st = window.state || {};
+          const snapshot = {
+            sampleCount: st.sampleCount ?? 0,
+            hoCount: st.hoCount ?? 0,
+            imsi: st.imsi ?? "",
+            servingCell: st.servingCell ?? null,
+            rf: st.rf ?? null,
+            neighbors: st.neighbors ?? [],
+            history: st.history ?? [],
+            liveSamples: st.liveSamples ?? [],
+            logs: st.logs ?? [],
+            savedAt: Date.now()
+          };
+          const serialized = JSON.stringify(snapshot);
+          try { localStorage.setItem("rt_persistent_state_backup", serialized); } catch (_e) {}
+          if (window.AndroidModem && typeof window.AndroidModem.saveStateToDevice === "function") {
+            window.AndroidModem.saveStateToDevice(serialized);
           }
-        });
-        unitSpan = document.createElement("span");
-        unitSpan.setAttribute("data-rt-inline-dbm", "1");
-        unitSpan.textContent = "dBm";
-        unitSpan.style.cssText = "font-size:11px;color:#94a3b8;font-weight:600;display:inline;";
-        parent.appendChild(unitSpan);
-      }
-    }
+        } catch (_e) {}
+      };
 
-    // Also inspect any card containing RSRP label and ensure dBm sits inline to the right of the numeric value
-    document.querySelectorAll("div").forEach(div => {
-      if (div.children.length >= 2 && div.textContent && div.textContent.includes("RSRP")) {
-        const valChild = Array.from(div.querySelectorAll("span, div")).find(el =>
-          /^[-+]?\d+(\.\d+)?$/.test((el.textContent || "").trim())
-        );
-        if (valChild && valChild.parentElement) {
-          const row = valChild.parentElement;
-          const dbmChild = Array.from(row.children).find(c => c !== valChild && (c.textContent || "").trim().toLowerCase() === "dbm");
-          if (dbmChild) {
-            row.style.display = "flex";
-            row.style.flexDirection = "row";
-            row.style.alignItems = "baseline";
-            row.style.justifyContent = "center";
-            row.style.gap = "6px";
-            row.style.whiteSpace = "nowrap";
-            valChild.style.display = "inline";
-            dbmChild.style.display = "inline";
+      window.rtRestoreStateOnBoot = function() {
+        try {
+          let raw = "";
+          if (window.AndroidModem && typeof window.AndroidModem.loadStateFromDevice === "function") {
+            raw = window.AndroidModem.loadStateFromDevice() || "";
           }
-        }
-      }
-    });
+          if (!raw || raw.trim() === "") {
+            try { raw = localStorage.getItem("rt_persistent_state_backup") || ""; } catch (_e) {}
+          }
+          if (raw && raw.trim() !== "") {
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === "object") {
+              window.state = window.state || {};
+              if (typeof parsed.sampleCount === "number") window.state.sampleCount = parsed.sampleCount;
+              if (typeof parsed.hoCount === "number") window.state.hoCount = parsed.hoCount;
+              if (parsed.imsi !== undefined) window.state.imsi = parsed.imsi;
+              if (parsed.servingCell !== undefined) window.state.servingCell = parsed.servingCell;
+              if (parsed.rf !== undefined) window.state.rf = parsed.rf;
+              if (Array.isArray(parsed.neighbors)) window.state.neighbors = parsed.neighbors;
+              if (Array.isArray(parsed.history)) window.state.history = parsed.history;
+              if (Array.isArray(parsed.liveSamples)) window.state.liveSamples = parsed.liveSamples;
+              if (Array.isArray(parsed.logs)) window.state.logs = parsed.logs;
+              const imsiEl = document.getElementById("rt-inline-imsi");
+              if (imsiEl && window.state.imsi) imsiEl.textContent = window.state.imsi;
+            }
+          }
+        } catch (_e) {}
+      };
 
-    // Format Band with frequency range in parentheses
-    if (window.state && window.state.servingCell && window.state.servingCell.band) {
-      const formatted = formatBandWithRange(window.state.servingCell.band);
-      if (formatted !== window.state.servingCell.band) {
-        window.state.servingCell.band = formatted;
-        if (typeof addLog === "function") {
-          addLog("RF", "BAND", `Band: ${formatted}`, "Band frequency range updated");
-        }
-      }
-      const bandEl = document.getElementById("cell-band");
-      if (bandEl) bandEl.textContent = formatted;
-      const bwEl = document.getElementById("cell-bw");
-      if (bwEl) bwEl.textContent = formatted;
+      window.rtRestoreStateOnBoot();
+      setInterval(function() {
+        try { if (typeof window.rtPersistFullStateNow === "function") window.rtPersistFullStateNow(); } catch (_e) {}
+      }, 3000);
+
+      exitBtn.addEventListener("click", function() {
+        try { if (typeof addLog === "function") addLog("SYS", "EXIT", "שמירת נתונים ויציאה מבוקרת מהאפליקציה"); } catch (_e) {}
+        try { if (typeof window.rtPersistFullStateNow === "function") window.rtPersistFullStateNow(); } catch (_e) {}
+        try {
+          if (window.AndroidModem && typeof window.AndroidModem.exitApp === "function") {
+            window.AndroidModem.exitApp();
+            return;
+          }
+        } catch (_e) {}
+        try { window.close(); } catch (_e) {}
+      });
     }
   }
 
-  const origModem = window.onRealModemData;
-  if (typeof origModem === "function" && !origModem._rtInlineDbmWrapped) {
-    const wrapped = function(data) {
-      if (data && data.imsi && window.state && data.imsi !== window.state.imsi) {
-        window.state.imsi = data.imsi;
-        if (typeof addLog === "function") {
-          addLog("SYS", "IMSI", `IMSI: ${data.imsi}`, "Device IMSI updated");
-        }
-      }
-      if (data && data.servingCell && data.servingCell.band) {
-        data.servingCell.band = formatBandWithRange(data.servingCell.band);
-      }
-      const res = origModem.apply(this, arguments);
-      fixRsrpInlineDbm();
-      return res;
-    };
-    wrapped._rtInlineDbmWrapped = true;
-    window.onRealModemData = wrapped;
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", mountInlineImsiAndExitBtn);
+  } else {
+    mountInlineImsiAndExitBtn();
   }
-
-  document.addEventListener("DOMContentLoaded", function() {
-    fixRsrpInlineDbm();
-    setTimeout(fixRsrpInlineDbm, 200);
-  });
-  setInterval(fixRsrpInlineDbm, 800);
 })();
 </script>
 </body>
