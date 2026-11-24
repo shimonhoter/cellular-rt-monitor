@@ -1338,9 +1338,9 @@ ${sampledRows.join('\n')}`;
 
 
 <script id="rt-persistent-store">
-// [RT_PERSISTENT_STORE_V3]
+// [RT_PERSISTENT_STORE_V4]
 (function() {
-  const KEY = "rtmonitor_persistent_state_v3";
+  const KEY = "rtmonitor_persistent_state_v4";
   let manualResetInProgress = false;
 
   function getAppState() {
@@ -1394,24 +1394,22 @@ ${sampledRows.join('\n')}`;
   }
 
   function refreshAllViews() {
-      const fnNames = ["updateLiveUI", "renderLogs", "renderHistory", "renderLiveChart", "renderChart", "drawChart", "updateStats", "renderAll"];
-      for (const name of fnNames) {
-        try {
-          if (typeof window[name] === "function") window[name]();
-        } catch (e) {}
-      }
-      try { if (typeof updateLiveUI === "function") updateLiveUI(); } catch (e) {}
-      try { if (typeof renderLogs === "function") renderLogs(); } catch (e) {}
-      try { if (typeof renderLiveChart === "function") renderLiveChart(); } catch (e) {}
-    } catch (e) {}
+    const fnNames = ["updateLiveUI", "renderLogs", "renderHistory", "renderLiveChart", "renderChart", "drawChart", "updateStats", "renderAll"];
+    for (const name of fnNames) {
+      try {
+        if (typeof window[name] === "function") window[name]();
+      } catch (e) {}
     }
+    try { if (typeof updateLiveUI === "function") updateLiveUI(); } catch (e) {}
+    try { if (typeof renderLogs === "function") renderLogs(); } catch (e) {}
+    try { if (typeof renderLiveChart === "function") renderLiveChart(); } catch (e) {}
   }
 
   function restoreNow() {
     if (manualResetInProgress) return;
     try {
       const st = getAppState();
-      const raw = localStorage.getItem(KEY) || localStorage.getItem("rtmonitor_persistent_state_v2") || localStorage.getItem("rtmonitor_persistent_state_v1");
+      const raw = localStorage.getItem(KEY) || localStorage.getItem("rtmonitor_persistent_state_v3") || localStorage.getItem("rtmonitor_persistent_state_v2") || localStorage.getItem("rtmonitor_persistent_state_v1");
       if (!raw || !st) return;
       const parsed = JSON.parse(raw);
       const saved = parsed && parsed.state ? parsed.state : null;
@@ -1437,6 +1435,7 @@ ${sampledRows.join('\n')}`;
     manualResetInProgress = true;
     try {
       localStorage.removeItem(KEY);
+      localStorage.removeItem("rtmonitor_persistent_state_v3");
       localStorage.removeItem("rtmonitor_persistent_state_v2");
       localStorage.removeItem("rtmonitor_persistent_state_v1");
     } catch (e) {}
@@ -1465,6 +1464,7 @@ ${sampledRows.join('\n')}`;
           manualResetInProgress = true;
           try {
             localStorage.removeItem(KEY);
+            localStorage.removeItem("rtmonitor_persistent_state_v3");
             localStorage.removeItem("rtmonitor_persistent_state_v2");
             localStorage.removeItem("rtmonitor_persistent_state_v1");
           } catch (e) {}
