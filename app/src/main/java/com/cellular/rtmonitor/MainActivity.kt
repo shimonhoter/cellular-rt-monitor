@@ -235,10 +235,23 @@ class MainActivity : AppCompatActivity() {
         fun exitApp() {
             runOnUiThread {
                 allowExitApp = true
-                finish()
+                try {
+                    BackgroundMonitorService.stopService(this@MainActivity)
+                } catch (_: Exception) {
+                }
+                try {
+                    finishAffinity()
+                } catch (_: Exception) {
+                    finish()
+                }
+                pollingHandler.postDelayed({
+                    try {
+                        android.os.Process.killProcess(android.os.Process.myPid())
+                    } catch (_: Exception) {
+                    }
+                }, 250)
             }
         }
-
         @JavascriptInterface
         fun openShizukuApp() {
             val launchIntent = packageManager.getLaunchIntentForPackage("moe.shizuku.privileged.api")
