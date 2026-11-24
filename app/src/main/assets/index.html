@@ -1329,5 +1329,100 @@ ${sampledRows.join('\n')}`;
 })();
 </script>
 
+
+<script id="rt-persistent-store">
+// [RT_PERSISTENT_STORE_V1]
+(function() {
+  const STORAGE_KEY = "rtmonitor_persistent_state_v1";
+  let restoring = false;
+
+  function saveStateNow() {
+    if (restoring) return;
+    try {
+      if (typeof state === "undefined" || !state) return;
+      const payload = {
+        sampleCount: state.sampleCount || 0,
+        hoCount: state.hoCount || 0,
+        servingCell: state.servingCell || null,
+        rf: state.rf || null,
+        history: Array.isArray(state.history) ? state.history.slice(-120) : [],
+        liveSamples: Array.isArray(state.liveSamples) ? state.liveSamples.slice(-5000) : [],
+        logs: Array.isArray(state.logs) ? state.logs.slice(-500) : []
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    } catch (e) {}
+  }
+
+  function restoreStateNow() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw || typeof state === "undefined" || !state) return;
+      const p = JSON.parse(raw);
+      restoring = true;
+      if (typeof p.sampleCount === "number") state.sampleCount = p.sampleCount;
+      if (typeof p.hoCount === "number") state.hoCount = p.hoCount;
+      if (p.servingCell && typeof state.servingCell === "object") {
+        Object.assign(state.servingCell, p.servingCell);
+      }
+      if (p.rf && typeof state.rf === "object") {
+        Object.assign(state.rf, p.rf);
+      }
+      if (Array.isArray(p.history) && Array.isArray(state.history)) {
+        state.history.length = 0;
+        p.history.forEach(item => state.history.push(item));
+      }
+      if (Array.isArray(p.liveSamples) && Array.isArray(state.liveSamples)) {
+        state.liveSamples.length = 0;
+        p.liveSamples.forEach(item => state.liveSamples.push(item));
+      }
+      if (Array.isArray(p.logs) && Array.isArray(state.logs)) {
+        state.logs.length = 0;
+        p.logs.forEach(item => state.logs.push(item));
+      }
+      if (typeof updateLiveUI === "function") updateLiveUI();
+      if (typeof renderLogs === "function") renderLogs();
+    } catch (e) {
+    } finally {
+      restoring = false;
+    }
+  }
+
+  window.rtManualResetAllData = function() {
+    try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+    try {
+      if (typeof state !== "undefined" && state) {
+        state.sampleCount = 0;
+        state.hoCount = 0;
+        if (Array.isArray(state.history)) state.history.length = 0;
+        if (Array.isArray(state.liveSamples)) state.liveSamples.length = 0;
+        if (Array.isArray(state.logs)) state.logs.length = 0;
+      }
+      if (typeof updateLiveUI === "function") updateLiveUI();
+      if (typeof renderLogs === "function") renderLogs();
+    } catch (e) {}
+  };
+
+  // חיבור אוטומטי לכפתורי ניקוי/איפוס קיימים בלבד
+  document.addEventListener("DOMContentLoaded", function() {
+    restoreStateNow();
+    document.querySelectorAll("button").forEach(btn => {
+      const txt = (btn.textContent || "").trim();
+      const oc = btn.getAttribute("onclick") || "";
+      if (txt.includes("נקה") || txt.includes("איפוס") || /clear|reset/i.test(oc)) {
+        btn.addEventListener("click", function() {
+          setTimeout(function() {
+            try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+          }, 50);
+        });
+      }
+    });
+  });
+
+  setInterval(saveStateNow, 1500);
+  window.addEventListener("pagehide", saveStateNow);
+  window.addEventListener("beforeunload", saveStateNow);
+})();
+</script>
+
 </body>
 </html>
