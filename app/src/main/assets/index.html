@@ -1733,5 +1733,56 @@ ${sampledRows.join('\n')}`;
   }
 })();
 </script>
+<script id="rt-step1-inline-dbm">
+// [RT_STEP1_INLINE_DBM_SAFE]
+(function() {
+  function applyInlineDbmOnce() {
+    try {
+      const rsrpEl = document.getElementById("kpi-rsrp") || document.getElementById("rsrp-value");
+      if (rsrpEl && rsrpEl.parentElement) {
+        const parent = rsrpEl.parentElement;
+        parent.style.display = "flex";
+        parent.style.flexDirection = "row";
+        parent.style.alignItems = "baseline";
+        parent.style.justifyContent = "center";
+        parent.style.gap = "6px";
+        parent.style.whiteSpace = "nowrap";
+        rsrpEl.style.display = "inline";
+
+        let unitSpan = parent.querySelector("[data-rt-inline-dbm='1']");
+        if (!unitSpan) {
+          Array.from(parent.childNodes).forEach(node => {
+            if (node !== rsrpEl && node.textContent && node.textContent.trim() === "dBm") {
+              node.remove();
+            }
+          });
+          unitSpan = document.createElement("span");
+          unitSpan.setAttribute("data-rt-inline-dbm", "1");
+          unitSpan.textContent = "dBm";
+          unitSpan.style.cssText = "font-size:11px;color:#94a3b8;font-weight:600;display:inline;";
+          parent.appendChild(unitSpan);
+        }
+      }
+    } catch (_e) {}
+  }
+
+  const orig = window.onRealModemData;
+  if (typeof orig === "function" && !orig._rtStep1Wrapped) {
+    const wrapped = function(data) {
+      const res = orig.apply(this, arguments);
+      applyInlineDbmOnce();
+      return res;
+    };
+    wrapped._rtStep1Wrapped = true;
+    window.onRealModemData = wrapped;
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", applyInlineDbmOnce);
+  } else {
+    applyInlineDbmOnce();
+  }
+})();
+</script>
 </body>
 </html>
