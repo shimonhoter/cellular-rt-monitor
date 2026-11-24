@@ -34,6 +34,7 @@ class MainActivity : AppCompatActivity() {
     private val pollingHandler = Handler(Looper.getMainLooper())
     private val SHIZUKU_CODE = 1001
     private var allowExitApp = false
+    private var liveStreamStarted = false
     private var fileUploadCallback: ValueCallback<Array<Uri>>? = null
 
     private val fileChooserLauncher = registerForActivityResult(
@@ -118,6 +119,7 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         updateShizukuUiState()
+        startRealModemStream()
         startBackgroundMonitorServiceSafely()
     }
 
@@ -295,18 +297,25 @@ class MainActivity : AppCompatActivity() {
         val missing = needed.filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
-        if (missing.isEmpty()) {
-            startRealModemStream()
-        } else {
+        startRealModemStream()
+        if (missing.isNotEmpty()) {
             permissionLauncher.launch(missing.toTypedArray())
         }
     }
 
     private fun startRealModemStream() {
-        telemetryEngine.startListening()
+        if (liveStreamStarted) return
+        liveStreamStarted = true
+        try {
+            telemetryEngine.startListening()
+        } catch (_: Exception) {
+        }
         val pollRunnable = object : Runnable {
             override fun run() {
-                telemetryEngine.collectAndEmitTelemetry()
+                try {
+                    telemetryEngine.collectAndEmitTelemetry()
+                } catch (_: Exception) {
+                }
                 pollingHandler.postDelayed(this, 1000)
             }
         }
