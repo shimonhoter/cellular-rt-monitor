@@ -30,7 +30,36 @@
         ::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
         @keyframes pulse-fast { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
         .live-dot { animation: pulse-fast 1.2s infinite; }
-    </style>
+        .header-left-group {
+      display: flex;
+      gap: 8px;
+    }
+    .header-btn {
+      background: transparent;
+      border: 1px solid #b91c1c;
+      color: #ffffff;
+      padding: 4px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: 'Heebo', sans-serif;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .header-btn:hover {
+      background: rgba(185, 28, 28, 0.1);
+    }
+    #rt-help-btn {
+        border: 1px solid #6b7280;
+    }
+    .ct-label {
+      color: #9ca3af;
+      font-size: 10px;
+    }
+    .ct-grid {
+      stroke: #374151;
+      stroke-dasharray: 2px;
+    }
+</style>
 </head>
 <body class="h-screen flex flex-col overflow-hidden select-none">
 
