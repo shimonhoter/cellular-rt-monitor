@@ -1330,97 +1330,145 @@ ${sampledRows.join('\n')}`;
 </script>
 
 
+
+
+
 <script id="rt-persistent-store">
-// [RT_PERSISTENT_STORE_V1]
+// [RT_PERSISTENT_STORE_V2]
 (function() {
-  const STORAGE_KEY = "rtmonitor_persistent_state_v1";
-  let restoring = false;
+  const KEY = "rtmonitor_persistent_state_v2";
+  let manualResetInProgress = false;
 
-  function saveStateNow() {
-    if (restoring) return;
+  function safeClone(val, fallback) {
     try {
-      if (typeof state === "undefined" || !state) return;
-      const payload = {
-        sampleCount: state.sampleCount || 0,
-        hoCount: state.hoCount || 0,
-        servingCell: state.servingCell || null,
-        rf: state.rf || null,
-        history: Array.isArray(state.history) ? state.history.slice(-120) : [],
-        liveSamples: Array.isArray(state.liveSamples) ? state.liveSamples.slice(-5000) : [],
-        logs: Array.isArray(state.logs) ? state.logs.slice(-500) : []
-      };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-    } catch (e) {}
-  }
-
-  function restoreStateNow() {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw || typeof state === "undefined" || !state) return;
-      const p = JSON.parse(raw);
-      restoring = true;
-      if (typeof p.sampleCount === "number") state.sampleCount = p.sampleCount;
-      if (typeof p.hoCount === "number") state.hoCount = p.hoCount;
-      if (p.servingCell && typeof state.servingCell === "object") {
-        Object.assign(state.servingCell, p.servingCell);
-      }
-      if (p.rf && typeof state.rf === "object") {
-        Object.assign(state.rf, p.rf);
-      }
-      if (Array.isArray(p.history) && Array.isArray(state.history)) {
-        state.history.length = 0;
-        p.history.forEach(item => state.history.push(item));
-      }
-      if (Array.isArray(p.liveSamples) && Array.isArray(state.liveSamples)) {
-        state.liveSamples.length = 0;
-        p.liveSamples.forEach(item => state.liveSamples.push(item));
-      }
-      if (Array.isArray(p.logs) && Array.isArray(state.logs)) {
-        state.logs.length = 0;
-        p.logs.forEach(item => state.logs.push(item));
-      }
-      if (typeof updateLiveUI === "function") updateLiveUI();
-      if (typeof renderLogs === "function") renderLogs();
+      return JSON.parse(JSON.stringify(val));
     } catch (e) {
-    } finally {
-      restoring = false;
+      return fallback;
     }
   }
 
+  function snapshotState() {
+    if (typeof state === "undefined" || !state || manualResetInProgress) return null;
+    const snap = {};
+    for (const k of Object.keys(state)) {
+      const v = state[k];
+      if (typeof v === "number" || typeof v === "string" || typeof v === "boolean" || v === null) {
+        snap[k] = v;
+      } else if (Array.isArray(v)) {
+        snap[k] = safeClone(v.slice(-2000), []);
+      } else if (typeof v === "object") {
+        snap[k] = safeClone(v, {});
+      }
+    }
+    return snap;
+  }
+
+  function saveNow() {
+    if (manualResetInProgress) return;
+    try {
+      const snap = snapshotState();
+      if (!snap) return;
+      const hasMeaningfulData =
+        (typeof snap.sampleCount === "number" && snap.sampleCount > 0) ||
+        (typeof snap.hoCount === "number" && snap.hoCount > 0) ||
+        (Array.isArray(snap.logs) && snap.logs.length > 0) ||
+        (Array.isArray(snap.history) && snap.history.length > 0) ||
+        (Array.isArray(snap.liveSamples) && snap.liveSamples.length > 0);
+      if (!hasMeaningfulData) return;
+      localStorage.setItem(KEY, JSON.stringify({ ts: Date.now(), state: snap }));
+    } catch (e) {}
+  }
+
+  function refreshUi() {
+    try { if (typeof updateLiveUI === "function") updateLiveUI(); } catch (e) {}
+    try { if (typeof renderLogs === "function") renderLogs(); } catch (e) {}
+    try { if (typeof renderChart === "function") renderChart(); } catch (e) {}
+    try { if (typeof drawChart === "function") drawChart(); } catch (e) {}
+  }
+
+  function restoreNow() {
+    if (manualResetInProgress) return;
+    try {
+      const raw = localStorage.getItem(KEY);
+      if (!raw || typeof state === "undefined" || !state) return;
+      const parsed = JSON.parse(raw);
+      const saved = parsed && parsed.state ? parsed.state : null;
+      if (!saved || typeof saved !== "object") return;
+
+      for (const k of Object.keys(saved)) {
+        const sv = saved[k];
+        if (Array.isArray(sv)) {
+          if (!Array.isArray(state[k])) state[k] = [];
+          state[k].length = 0;
+          for (let i = 0; i < sv.length; i++) state[k].push(sv[i]);
+        } else if (sv !== null && typeof sv === "object" && state[k] && typeof state[k] === "object") {
+          Object.assign(state[k], sv);
+        } else {
+          state[k] = sv;
+        }
+      }
+      refreshUi();
+    } catch (e) {}
+  }
+
   window.rtManualResetAllData = function() {
-    try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+    manualResetInProgress = true;
+    try { localStorage.removeItem(KEY); } catch (e) {}
+    try { localStorage.removeItem("rtmonitor_persistent_state_v1"); } catch (e) {}
     try {
       if (typeof state !== "undefined" && state) {
-        state.sampleCount = 0;
-        state.hoCount = 0;
-        if (Array.isArray(state.history)) state.history.length = 0;
-        if (Array.isArray(state.liveSamples)) state.liveSamples.length = 0;
-        if (Array.isArray(state.logs)) state.logs.length = 0;
+        if (typeof state.sampleCount === "number") state.sampleCount = 0;
+        if (typeof state.hoCount === "number") state.hoCount = 0;
+        for (const k of Object.keys(state)) {
+          if (Array.isArray(state[k])) state[k].length = 0;
+        }
       }
-      if (typeof updateLiveUI === "function") updateLiveUI();
-      if (typeof renderLogs === "function") renderLogs();
+      refreshUi();
     } catch (e) {}
+    setTimeout(function() { manualResetInProgress = false; }, 300);
   };
 
-  // חיבור אוטומטי לכפתורי ניקוי/איפוס קיימים בלבד
-  document.addEventListener("DOMContentLoaded", function() {
-    restoreStateNow();
-    document.querySelectorAll("button").forEach(btn => {
+  function hookManualResetButtons() {
+    document.querySelectorAll("button").forEach(function(btn) {
+      if (btn.dataset.rtResetHooked === "1") return;
       const txt = (btn.textContent || "").trim();
       const oc = btn.getAttribute("onclick") || "";
       if (txt.includes("נקה") || txt.includes("איפוס") || /clear|reset/i.test(oc)) {
+        btn.dataset.rtResetHooked = "1";
         btn.addEventListener("click", function() {
-          setTimeout(function() {
-            try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
-          }, 50);
+          manualResetInProgress = true;
+          try { localStorage.removeItem(KEY); } catch (e) {}
+          try { localStorage.removeItem("rtmonitor_persistent_state_v1"); } catch (e) {}
+          setTimeout(function() { manualResetInProgress = false; }, 300);
         });
       }
     });
-  });
+  }
 
-  setInterval(saveStateNow, 1500);
-  window.addEventListener("pagehide", saveStateNow);
-  window.addEventListener("beforeunload", saveStateNow);
+  function scheduleRestorePasses() {
+    restoreNow();
+    hookManualResetButtons();
+    setTimeout(function() { restoreNow(); hookManualResetButtons(); }, 150);
+    setTimeout(function() { restoreNow(); hookManualResetButtons(); }, 600);
+    setTimeout(function() { restoreNow(); hookManualResetButtons(); }, 1500);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", scheduleRestorePasses);
+  } else {
+    scheduleRestorePasses();
+  }
+  window.addEventListener("load", scheduleRestorePasses);
+  setInterval(function() {
+    hookManualResetButtons();
+    saveNow();
+  }, 1000);
+  document.addEventListener("visibilitychange", function() {
+    if (document.hidden) saveNow();
+    else restoreNow();
+  });
+  window.addEventListener("pagehide", saveNow);
+  window.addEventListener("beforeunload", saveNow);
 })();
 </script>
 
