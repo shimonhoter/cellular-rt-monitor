@@ -1,8 +1,11 @@
 // Update to version 4.1.7
 package com.cellular.rtmonitor
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
+import androidx.core.content.ContextCompat
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -106,6 +109,13 @@ class ModemTelemetryEngine(
     
     @SuppressLint("MissingPermission", "HardwareIds")
     private fun resolveDeviceImsi(): String {
+        val hasPhonePerm = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.READ_PHONE_STATE
+        ) == PackageManager.PERMISSION_GRANTED
+        if (!hasPhonePerm) {
+            return "Missing READ_PHONE_STATE Permission"
+        }
         return try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 val subMgr = context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE) as? android.telephony.SubscriptionManager
@@ -122,7 +132,7 @@ class ModemTelemetryEngine(
             val direct = telephonyManager.subscriberId
             if (!direct.isNullOrBlank()) direct else "Unavailable"
         } catch (_: SecurityException) {
-            "Restricted (No Permission)"
+            "Restricted by OS/Carrier (SecurityException)"
         } catch (_: Exception) {
             "Unavailable"
         }

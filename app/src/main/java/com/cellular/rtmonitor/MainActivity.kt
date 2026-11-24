@@ -232,6 +232,14 @@ class MainActivity : AppCompatActivity() {
         }
 
         @JavascriptInterface
+        fun exitApp() {
+            runOnUiThread {
+                allowExitApp = true
+                finish()
+            }
+        }
+
+        @JavascriptInterface
         fun openShizukuApp() {
             val launchIntent = packageManager.getLaunchIntentForPackage("moe.shizuku.privileged.api")
             if (launchIntent != null) {
