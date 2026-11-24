@@ -448,6 +448,7 @@
             importedFileName: null,
             logs: []
         };
+        window.state = state;
 
         const MAX_HISTORY = 90;
 
@@ -1333,25 +1334,34 @@ ${sampledRows.join('\n')}`;
 
 
 
+
+
+
 <script id="rt-persistent-store">
-// [RT_PERSISTENT_STORE_V2]
+// [RT_PERSISTENT_STORE_V3]
 (function() {
-  const KEY = "rtmonitor_persistent_state_v2";
+  const KEY = "rtmonitor_persistent_state_v3";
   let manualResetInProgress = false;
 
-  function safeClone(val, fallback) {
-    try {
-      return JSON.parse(JSON.stringify(val));
-    } catch (e) {
-      return fallback;
+  function getAppState() {
+    if (typeof window.state !== "undefined" && window.state) return window.state;
+    if (typeof state !== "undefined" && state) {
+      window.state = state;
+      return state;
     }
+    return null;
+  }
+
+  function safeClone(val, fallback) {
+    try { return JSON.parse(JSON.stringify(val)); } catch (e) { return fallback; }
   }
 
   function snapshotState() {
-    if (typeof state === "undefined" || !state || manualResetInProgress) return null;
+    const st = getAppState();
+    if (!st || manualResetInProgress) return null;
     const snap = {};
-    for (const k of Object.keys(state)) {
-      const v = state[k];
+    for (const k of Object.keys(st)) {
+      const v = st[k];
       if (typeof v === "number" || typeof v === "string" || typeof v === "boolean" || v === null) {
         snap[k] = v;
       } else if (Array.isArray(v)) {
@@ -1363,34 +1373,41 @@ ${sampledRows.join('\n')}`;
     return snap;
   }
 
+  function hasData(snap) {
+    if (!snap) return false;
+    return (
+      (typeof snap.sampleCount === "number" && snap.sampleCount > 0) ||
+      (typeof snap.hoCount === "number" && snap.hoCount > 0) ||
+      (Array.isArray(snap.logs) && snap.logs.length > 0) ||
+      (Array.isArray(snap.history) && snap.history.length > 0) ||
+      (Array.isArray(snap.liveSamples) && snap.liveSamples.length > 0)
+    );
+  }
+
   function saveNow() {
     if (manualResetInProgress) return;
     try {
       const snap = snapshotState();
-      if (!snap) return;
-      const hasMeaningfulData =
-        (typeof snap.sampleCount === "number" && snap.sampleCount > 0) ||
-        (typeof snap.hoCount === "number" && snap.hoCount > 0) ||
-        (Array.isArray(snap.logs) && snap.logs.length > 0) ||
-        (Array.isArray(snap.history) && snap.history.length > 0) ||
-        (Array.isArray(snap.liveSamples) && snap.liveSamples.length > 0);
-      if (!hasMeaningfulData) return;
+      if (!hasData(snap)) return;
       localStorage.setItem(KEY, JSON.stringify({ ts: Date.now(), state: snap }));
     } catch (e) {}
   }
 
-  function refreshUi() {
-    try { if (typeof updateLiveUI === "function") updateLiveUI(); } catch (e) {}
-    try { if (typeof renderLogs === "function") renderLogs(); } catch (e) {}
-    try { if (typeof renderChart === "function") renderChart(); } catch (e) {}
-    try { if (typeof drawChart === "function") drawChart(); } catch (e) {}
+  function refreshAllViews() {
+    const fnNames = ["updateLiveUI", "renderLogs", "renderHistory", "renderChart", "drawChart", "updateStats", "renderAll"];
+    for (const name of fnNames) {
+      try {
+        if (typeof window[name] === "function") window[name]();
+      } catch (e) {}
+    }
   }
 
   function restoreNow() {
     if (manualResetInProgress) return;
     try {
-      const raw = localStorage.getItem(KEY);
-      if (!raw || typeof state === "undefined" || !state) return;
+      const st = getAppState();
+      const raw = localStorage.getItem(KEY) || localStorage.getItem("rtmonitor_persistent_state_v2") || localStorage.getItem("rtmonitor_persistent_state_v1");
+      if (!raw || !st) return;
       const parsed = JSON.parse(raw);
       const saved = parsed && parsed.state ? parsed.state : null;
       if (!saved || typeof saved !== "object") return;
@@ -1398,71 +1415,81 @@ ${sampledRows.join('\n')}`;
       for (const k of Object.keys(saved)) {
         const sv = saved[k];
         if (Array.isArray(sv)) {
-          if (!Array.isArray(state[k])) state[k] = [];
-          state[k].length = 0;
-          for (let i = 0; i < sv.length; i++) state[k].push(sv[i]);
-        } else if (sv !== null && typeof sv === "object" && state[k] && typeof state[k] === "object") {
-          Object.assign(state[k], sv);
+          if (!Array.isArray(st[k])) st[k] = [];
+          st[k].length = 0;
+          for (let i = 0; i < sv.length; i++) st[k].push(sv[i]);
+        } else if (sv !== null && typeof sv === "object" && st[k] && typeof st[k] === "object") {
+          Object.assign(st[k], sv);
         } else {
-          state[k] = sv;
+          st[k] = sv;
         }
       }
-      refreshUi();
+      refreshAllViews();
     } catch (e) {}
   }
 
   window.rtManualResetAllData = function() {
     manualResetInProgress = true;
-    try { localStorage.removeItem(KEY); } catch (e) {}
-    try { localStorage.removeItem("rtmonitor_persistent_state_v1"); } catch (e) {}
     try {
-      if (typeof state !== "undefined" && state) {
-        if (typeof state.sampleCount === "number") state.sampleCount = 0;
-        if (typeof state.hoCount === "number") state.hoCount = 0;
-        for (const k of Object.keys(state)) {
-          if (Array.isArray(state[k])) state[k].length = 0;
+      localStorage.removeItem(KEY);
+      localStorage.removeItem("rtmonitor_persistent_state_v2");
+      localStorage.removeItem("rtmonitor_persistent_state_v1");
+    } catch (e) {}
+    try {
+      const st = getAppState();
+      if (st) {
+        if (typeof st.sampleCount === "number") st.sampleCount = 0;
+        if (typeof st.hoCount === "number") st.hoCount = 0;
+        for (const k of Object.keys(st)) {
+          if (Array.isArray(st[k])) st[k].length = 0;
         }
       }
-      refreshUi();
+      refreshAllViews();
     } catch (e) {}
-    setTimeout(function() { manualResetInProgress = false; }, 300);
+    setTimeout(function() { manualResetInProgress = false; }, 400);
   };
 
-  function hookManualResetButtons() {
+  function hookResetButtons() {
     document.querySelectorAll("button").forEach(function(btn) {
       if (btn.dataset.rtResetHooked === "1") return;
-      const txt = (btn.textContent || "").trim();
+      const t = (btn.textContent || "").trim();
       const oc = btn.getAttribute("onclick") || "";
-      if (txt.includes("נקה") || txt.includes("איפוס") || /clear|reset/i.test(oc)) {
+      if (t.includes("נקה") || t.includes("איפוס") || /clear|reset/i.test(oc)) {
         btn.dataset.rtResetHooked = "1";
         btn.addEventListener("click", function() {
           manualResetInProgress = true;
-          try { localStorage.removeItem(KEY); } catch (e) {}
-          try { localStorage.removeItem("rtmonitor_persistent_state_v1"); } catch (e) {}
-          setTimeout(function() { manualResetInProgress = false; }, 300);
+          try {
+            localStorage.removeItem(KEY);
+            localStorage.removeItem("rtmonitor_persistent_state_v2");
+            localStorage.removeItem("rtmonitor_persistent_state_v1");
+          } catch (e) {}
+          setTimeout(function() { manualResetInProgress = false; }, 400);
         });
       }
     });
   }
 
-  function scheduleRestorePasses() {
+  function runRestoreSequence() {
     restoreNow();
-    hookManualResetButtons();
-    setTimeout(function() { restoreNow(); hookManualResetButtons(); }, 150);
-    setTimeout(function() { restoreNow(); hookManualResetButtons(); }, 600);
-    setTimeout(function() { restoreNow(); hookManualResetButtons(); }, 1500);
+    hookResetButtons();
+    [100, 350, 800, 1600, 3000].forEach(function(ms) {
+      setTimeout(function() {
+        restoreNow();
+        hookResetButtons();
+      }, ms);
+    });
   }
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", scheduleRestorePasses);
+    document.addEventListener("DOMContentLoaded", runRestoreSequence);
   } else {
-    scheduleRestorePasses();
+    runRestoreSequence();
   }
-  window.addEventListener("load", scheduleRestorePasses);
+  window.addEventListener("load", runRestoreSequence);
   setInterval(function() {
-    hookManualResetButtons();
+    hookResetButtons();
     saveNow();
-  }, 1000);
+  }, 500);
   document.addEventListener("visibilitychange", function() {
     if (document.hidden) saveNow();
     else restoreNow();
