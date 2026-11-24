@@ -1733,54 +1733,130 @@ ${sampledRows.join('\n')}`;
   }
 })();
 </script>
-<script id="rt-step1-inline-dbm">
-// [RT_STEP1_INLINE_DBM_SAFE]
+<script id="rt-vertical-rf-top-exit">
+// [RT_VERTICAL_RF_TOP_EXIT_V1]
 (function() {
-  function applyInlineDbmOnce() {
+  function ensureTopLeftExitAndCompactRow() {
     try {
-      const rsrpEl = document.getElementById("kpi-rsrp") || document.getElementById("rsrp-value");
-      if (rsrpEl && rsrpEl.parentElement) {
-        const parent = rsrpEl.parentElement;
-        parent.style.display = "flex";
-        parent.style.flexDirection = "row";
-        parent.style.alignItems = "baseline";
-        parent.style.justifyContent = "center";
-        parent.style.gap = "6px";
-        parent.style.whiteSpace = "nowrap";
-        rsrpEl.style.display = "inline";
-
-        let unitSpan = parent.querySelector("[data-rt-inline-dbm='1']");
-        if (!unitSpan) {
-          Array.from(parent.childNodes).forEach(node => {
-            if (node !== rsrpEl && node.textContent && node.textContent.trim() === "dBm") {
-              node.remove();
+      let exitBtn = document.getElementById("rt-top-left-exit-btn");
+      if (!exitBtn) {
+        exitBtn = document.createElement("button");
+        exitBtn.id = "rt-top-left-exit-btn";
+        exitBtn.type = "button";
+        exitBtn.textContent = "יציאה";
+        exitBtn.style.cssText = "position:fixed;top:8px;left:8px;z-index:9999;padding:5px 10px;border-radius:6px;background:#b91c1c;color:#ffffff;font-weight:700;font-size:11px;border:1px solid #f87171;line-height:1.1;";
+        exitBtn.addEventListener("click", function() {
+          try {
+            if (typeof window.rtSaveBeforeExit === "function") window.rtSaveBeforeExit();
+          } catch (_s) {}
+          try {
+            if (window.AndroidModem && typeof window.AndroidModem.exitApp === "function") {
+              window.AndroidModem.exitApp();
+              return;
             }
+          } catch (_a) {}
+          try { window.close(); } catch (_c) {}
+        });
+        document.body.appendChild(exitBtn);
+      }
+
+      const topBar = document.querySelector("header") || document.body.firstElementChild;
+      if (topBar) {
+        topBar.style.paddingLeft = "64px";
+        topBar.style.gap = "4px";
+        const extraBtns = Array.from(topBar.querySelectorAll("button, a"));
+        extraBtns.forEach(el => {
+          if (el.id !== "rt-top-left-exit-btn" && /help|עזרה|\?/i.test((el.textContent || "").trim())) {
+            el.style.display = "none";
+          }
+        });
+      }
+    } catch (_e) {}
+  }
+
+  function stackRfMetricsVertically() {
+    try {
+      const targets = [
+        { ids: ["kpi-rssi", "rssi-value"], label: "RSSI", unit: "dBm" },
+        { ids: ["kpi-rsrp", "rsrp-value"], label: "RSRP", unit: "dBm" },
+        { ids: ["kpi-rsrq", "rsrq-value"], label: "RSRQ", unit: "dB" },
+        { ids: ["kpi-sinr", "sinr-value"], label: "SINR", unit: "dB" }
+      ];
+
+      const matchedCards = [];
+      targets.forEach(cfg => {
+        let valEl = null;
+        for (const id of cfg.ids) {
+          const found = document.getElementById(id);
+          if (found) { valEl = found; break; }
+        }
+        if (valEl) {
+          const row = valEl.parentElement;
+          if (row) {
+            row.style.display = "flex";
+            row.style.flexDirection = "row";
+            row.style.alignItems = "baseline";
+            row.style.justifyContent = "flex-end";
+            row.style.gap = "6px";
+            row.style.whiteSpace = "nowrap";
+            valEl.style.display = "inline";
+
+            let unitSpan = row.querySelector("[data-rt-unit-inline='1']");
+            if (!unitSpan) {
+              Array.from(row.childNodes).forEach(node => {
+                if (node !== valEl && node.textContent && /^(dbm|db)$/i.test(node.textContent.trim())) {
+                  node.remove();
+                }
+              });
+              unitSpan = document.createElement("span");
+              unitSpan.setAttribute("data-rt-unit-inline", "1");
+              unitSpan.textContent = cfg.unit;
+              unitSpan.style.cssText = "font-size:11px;color:#94a3b8;font-weight:600;display:inline;";
+              row.appendChild(unitSpan);
+            }
+          }
+          const card = valEl.closest("[class*='rounded'], [class*='card'], [class*='grid'] > div") || (row && row.parentElement);
+          if (card && !matchedCards.includes(card)) {
+            matchedCards.push(card);
+          }
+        }
+      });
+
+      if (matchedCards.length >= 2) {
+        const container = matchedCards[0].parentElement;
+        if (container) {
+          container.style.display = "flex";
+          container.style.flexDirection = "column";
+          container.style.gap = "6px";
+          container.style.gridTemplateColumns = "none";
+          matchedCards.forEach(c => {
+            c.style.width = "100%";
           });
-          unitSpan = document.createElement("span");
-          unitSpan.setAttribute("data-rt-inline-dbm", "1");
-          unitSpan.textContent = "dBm";
-          unitSpan.style.cssText = "font-size:11px;color:#94a3b8;font-weight:600;display:inline;";
-          parent.appendChild(unitSpan);
         }
       }
     } catch (_e) {}
   }
 
+  function applyAllLayoutRules() {
+    ensureTopLeftExitAndCompactRow();
+    stackRfMetricsVertically();
+  }
+
   const orig = window.onRealModemData;
-  if (typeof orig === "function" && !orig._rtStep1Wrapped) {
+  if (typeof orig === "function" && !orig._rtVerticalRfWrapped) {
     const wrapped = function(data) {
       const res = orig.apply(this, arguments);
-      applyInlineDbmOnce();
+      applyAllLayoutRules();
       return res;
     };
-    wrapped._rtStep1Wrapped = true;
+    wrapped._rtVerticalRfWrapped = true;
     window.onRealModemData = wrapped;
   }
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", applyInlineDbmOnce);
+    document.addEventListener("DOMContentLoaded", applyAllLayoutRules);
   } else {
-    applyInlineDbmOnce();
+    applyAllLayoutRules();
   }
 })();
 </script>
