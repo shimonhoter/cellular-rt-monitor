@@ -36,6 +36,10 @@ android {
         }
         release {
             isMinifyEnabled = false
+            val cfg = signingConfigs.findByName("persistentDebug")
+            if (cfg?.storeFile?.exists() == true) {
+                signingConfig = cfg
+            }
         }
     }
 
