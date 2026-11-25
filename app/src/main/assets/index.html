@@ -1898,5 +1898,90 @@ if (window.__rtStableV41) return;
 })();
 </script>
 
+
+<script id="rt-rf-direct-live-v4">
+/* RT_RF_DIRECT_LIVE_V4 */
+(function() {
+  if (window.__rtRfDirectLiveV4) return;
+  window.__rtRfDirectLiveV4 = true;
+
+  var lastRfEntryTs = 0;
+
+  function emitLiveRfLog(sourceTag) {
+    try {
+      var addFn = (typeof window.addLog === "function") ? window.addLog : (typeof addLog === "function" ? addLog : null);
+      var renderFn = (typeof window.renderLogs === "function") ? window.renderLogs : (typeof renderLogs === "function" ? renderLogs : null);
+      var st = window.state || (typeof state !== "undefined" ? state : null);
+      if (!addFn || !st) return;
+
+      st.logs = Array.isArray(st.logs) ? st.logs : [];
+      var sc = st.servingCell || {};
+      var rf = st.rf || {};
+
+      var rsrpStr = (typeof rf.rsrp === "number" && Number.isFinite(rf.rsrp)) ? rf.rsrp.toFixed(1) + " dBm" : "--";
+      var rsrqStr = (typeof rf.rsrq === "number" && Number.isFinite(rf.rsrq)) ? rf.rsrq.toFixed(1) + " dB" : "--";
+      var sinrStr = (typeof rf.sinr === "number" && Number.isFinite(rf.sinr)) ? rf.sinr.toFixed(1) + " dB" : "--";
+
+      var tech = (sc.tech && sc.tech !== "---") ? sc.tech : (st.activeRat || "CELL");
+      var pci = (sc.pci !== undefined && sc.pci !== null && sc.pci !== "---") ? sc.pci : "--";
+      var band = (sc.band && sc.band !== "---") ? sc.band : "--";
+
+      addFn(
+        "RF",
+        sourceTag || "LIVE",
+        tech + " PCI:" + pci + " | " + band,
+        "RSRP: " + rsrpStr + " | RSRQ: " + rsrqStr + " | SINR: " + sinrStr
+      );
+
+      if (renderFn) renderFn();
+    } catch (_e) {}
+  }
+
+  window.__rtEmitLiveRfNow = function(tag) {
+    emitLiveRfLog(tag || "MANUAL");
+  };
+
+  function hookModemHandler() {
+    var fn = window.onRealModemData;
+    if (typeof fn === "function" && !fn._rtRfDirectV4) {
+      var wrapped = function() {
+        var res = fn.apply(this, arguments);
+        var now = Date.now();
+        if (now - lastRfEntryTs >= 1000) {
+          lastRfEntryTs = now;
+          emitLiveRfLog("MODEM");
+        }
+        return res;
+      };
+      wrapped._rtRfDirectV4 = true;
+      window.onRealModemData = wrapped;
+    }
+  }
+
+  hookModemHandler();
+  setInterval(hookModemHandler, 1000);
+
+  if (typeof window.setLogFilter === "function" && !window.setLogFilter._rtRfDirectFilter) {
+    var origFilter = window.setLogFilter;
+    window.setLogFilter = function(f) {
+      var res = origFilter.apply(this, arguments);
+      try {
+        var st = window.state || (typeof state !== "undefined" ? state : null);
+        if (f === "RF" && st) {
+          var hasRf = Array.isArray(st.logs) && st.logs.some(function(x) { return x && x.category === "RF"; });
+          if (!hasRf) {
+            emitLiveRfLog("FILTER_RF");
+          } else if (typeof window.renderLogs === "function") {
+            window.renderLogs();
+          }
+        }
+      } catch (_e) {}
+      return res;
+    };
+    window.setLogFilter._rtRfDirectFilter = true;
+  }
+})();
+</script>
+
 </body>
 </html>
