@@ -277,17 +277,6 @@
             <span id="rt-rf-diag-last" class="text-slate-300 truncate">Last RF: waiting...</span>
         </div>
 
-        
-        <div id="rt-probe-v9-panel" class="bg-slate-900 border border-amber-500/40 rounded p-1.5 flex flex-wrap items-center justify-between gap-1.5 text-[10px] font-mono shrink-0">
-            <div class="flex flex-wrap items-center gap-1">
-                <button type="button" onclick="window.__rtProbeRunStage(1)" class="px-1.5 py-0.5 rounded bg-amber-600/30 text-amber-200 border border-amber-500/40 font-bold">1:onRealModemData</button>
-                <button type="button" onclick="window.__rtProbeRunStage(2)" class="px-1.5 py-0.5 rounded bg-cyan-600/30 text-cyan-200 border border-cyan-500/40 font-bold">2:state.rf/samples</button>
-                <button type="button" onclick="window.__rtProbeRunStage(3)" class="px-1.5 py-0.5 rounded bg-indigo-600/30 text-indigo-200 border border-indigo-500/40 font-bold">3:addLog/renderLogs</button>
-                <button type="button" onclick="window.__rtProbeRunStage(4)" class="px-1.5 py-0.5 rounded bg-emerald-600/30 text-emerald-200 border border-emerald-500/40 font-bold">4:ForceDOM</button>
-            </div>
-            <span id="rt-probe-v9-status" class="text-amber-300 truncate">Probe V9: ready</span>
-        </div>
-
         <div id="log-stream" class="flex-1 bg-slate-950 border border-slate-800 rounded-lg p-2 overflow-y-auto space-y-1.5 text-xs ltr-box font-mono"></div>
     </section>
 
@@ -579,10 +568,21 @@
             const now = new Date();
             const ts = now.toTimeString().split(' ')[0];
             state.logs.unshift({ id: Date.now() + Math.random(), timestamp: ts, category, direction, title, summary });
-            if (state.logs.length > 400) state.logs.pop();
+            if (state.logs.length > 1000) state.logs.pop();
             if (!document.getElementById('view-logs').classList.contains('hidden')) {
                 renderLogs();
+            } else {
+                updateRfDiag();
             }
+        }
+
+        function updateRfDiag() {
+            const logsArr = Array.isArray(state.logs) ? state.logs : [];
+            const rfLogs = logsArr.filter(l => l.category === 'RF');
+            const c = document.getElementById('rt-rf-diag-counts');
+            if (c) c.textContent = `RF Logs: ${rfLogs.length} | Total: ${logsArr.length} | Filter: ${state.logFilter || 'ALL'}`;
+            const last = document.getElementById('rt-rf-diag-last');
+            if (last) last.textContent = rfLogs.length ? `Last RF: ${rfLogs[0].timestamp} ${rfLogs[0].title}` : 'Last RF: waiting...';
         }
 
         function setLogFilter(filter) {
@@ -600,6 +600,7 @@
             const logsArr = Array.isArray(state.logs) ? state.logs : [];
             const activeFilter = state.logFilter || 'ALL';
             const filtered = logsArr.filter(l => activeFilter === 'ALL' || l.category === activeFilter);
+            updateRfDiag();
             if (filtered.length === 0) {
                 container.innerHTML = '<div class="text-slate-500 text-center py-6">אין רשומות להצגה בקטגוריה זו.</div>';
                 return;
@@ -749,6 +750,16 @@
                     rssi: state.rf.rssi
                 });
                 if (state.liveSamples.length > 500) state.liveSamples.shift();
+
+                const nowMs = Date.now();
+                if (nowMs - (state._lastRfLogTs || 0) >= 1500) {
+                    state._lastRfLogTs = nowMs;
+                    const f1 = (v, u) => (typeof v === 'number' ? v.toFixed(1) + ' ' + u : '--');
+                    const scx = state.servingCell;
+                    addLog('RF', 'MODEM',
+                        `${scx.tech !== '---' ? scx.tech : state.activeRat} PCI:${scx.pci !== '---' ? scx.pci : '--'} | ${scx.band || '---'}`,
+                        `RSRP: ${f1(state.rf.rsrp, 'dBm')} | RSRQ: ${f1(state.rf.rsrq, 'dB')} | SINR: ${f1(state.rf.sinr, 'dB')}`);
+                }
 
                 if (typeof updateLiveUI === 'function') updateLiveUI();
                 if (typeof drawLiveChartOnce === 'function') drawLiveChartOnce();
@@ -1278,7 +1289,6 @@ ${sampledRows.join('\n')}`;
         requestAnimationFrame(renderLiveChart);
     </script>
 
-<style>
 
 <script>
 
@@ -1292,73 +1302,8 @@ ${sampledRows.join('\n')}`;
 
 
 window.rtSwitchToMapTab = function() {
-  try {
-    if (typeof window.switchTab === "function") {
-      window.switchTab("map");
-      return;
-    }
-  } catch (_e) {}
-  document.querySelectorAll(".tab-view").forEach(function(v) { v.classList.add("hidden"); });
-  var mv = document.getElementById("view-map");
-  if (mv) mv.classList.remove("hidden");
-  if (typeof window.rtRenderIsraelMap === "function") window.rtRenderIsraelMap();
+  if (typeof window.switchTab === "function") window.switchTab("map");
 };
-
-(function attachLiveRfLogs() {
-  if (window.__rtRfLogAttached) return;
-  window.__rtRfLogAttached = true;
-  var prev = window.onRealModemData;
-  var lastTs = 0;
-  window.onRealModemData = function(payload) {
-    var out;
-    if (typeof prev === "function") {
-      out = prev.apply(this, arguments);
-    }
-    try {
-      var now = Date.now();
-      if (now - lastTs >= 1500 && typeof window.addLog === "function" && window.state && window.state.rf) {
-        lastTs = now;
-        var sc = window.state.servingCell || {};
-        var rf = window.state.rf || {};
-        var rsrp = (typeof rf.rsrp === "number") ? rf.rsrp.toFixed(1) + " dBm" : "--";
-        var rsrq = (typeof rf.rsrq === "number") ? rf.rsrq.toFixed(1) + " dB" : "--";
-        var sinr = (typeof rf.sinr === "number") ? rf.sinr.toFixed(1) + " dB" : "--";
-        var title = (sc.tech || window.state.activeRat || "CELL") + " PCI:" + (sc.pci != null ? sc.pci : "--") + " | " + (sc.band || "---");
-        window.addLog("RF", "MODEM", title, "RSRP: " + rsrp + " | RSRQ: " + rsrq + " | SINR: " + sinr);
-      }
-    } catch (_e) {}
-    return out;
-  };
-})();
-
-window.rtSwitchToMapTab = function() {
-  if (typeof window.switchTab === "function") {
-    window.switchTab("map");
-  }
-};
-
-if (typeof window.onRealModemData === "function" && !window.onRealModemData._rtRfLogHook) {
-  const prevModemHandler = window.onRealModemData;
-  let lastRfLogTs = 0;
-  window.onRealModemData = function(payload) {
-    const res = prevModemHandler.apply(this, arguments);
-    try {
-      const now = Date.now();
-      if (now - lastRfLogTs >= 2000 && typeof addLog === "function" && window.state && window.state.rf) {
-        lastRfLogTs = now;
-        const sc = window.state.servingCell || {};
-        const rf = window.state.rf;
-        const rsrpTxt = typeof rf.rsrp === "number" ? `${rf.rsrp.toFixed(1)} dBm` : "--";
-        const rsrqTxt = typeof rf.rsrq === "number" ? `${rf.rsrq.toFixed(1)} dB` : "--";
-        const sinrTxt = typeof rf.sinr === "number" ? `${rf.sinr.toFixed(1)} dB` : "--";
-        const title = `${sc.tech || window.state.activeRat || "CELL"} PCI:${sc.pci ?? "--"} | ${sc.band || "---"}`;
-        addLog("RF", "MODEM", title, `RSRP: ${rsrpTxt} | RSRQ: ${rsrqTxt} | SINR: ${sinrTxt}`);
-      }
-    } catch (_e) {}
-    return res;
-  };
-  window.onRealModemData._rtRfLogHook = true;
-}
 
 if (window.__rtStableV41) return;
   window.__rtStableV41 = true;
@@ -1437,8 +1382,13 @@ if (window.__rtStableV41) return;
     sec.id = "view-map";
     sec.className = "tab-view flex-1 flex flex-col p-2 gap-2 overflow-y-auto hidden";
     sec.innerHTML = `
-        <strong style="font-size:12px;">מפת ישראל ותחנות בסיס חיה</strong>
-          ממתין למיקום ולתחנה מחוברת...
+        <div class="flex items-center justify-between text-xs">
+          <strong style="font-size:12px;">מפת ישראל ותחנות בסיס חיה</strong>
+          <button type="button" id="rt-map-center-now" class="px-2 py-0.5 rounded bg-cyan-600 text-white text-[11px] font-bold">מרכז אותי</button>
+        </div>
+        <div id="rt-map-stage" class="relative flex-1 min-h-[260px] bg-slate-900 border border-slate-800 rounded-lg overflow-hidden">
+          <div id="rt-map-tooltip" class="absolute bg-slate-950/90 border border-slate-700 rounded p-1.5 text-[11px] text-slate-200 pointer-events-none">ממתין למיקום ולתחנה מחוברת...</div>
+        </div>
     `;
     if (liveView && liveView.nextSibling) host.insertBefore(sec, liveView.nextSibling);
     else host.appendChild(sec);
@@ -1525,11 +1475,10 @@ if (window.__rtStableV41) return;
 
       tip.style.top = `${Math.max(8, Math.min(h - 94, uPt.y - 76))}px`;
       tip.style.left = `${Math.max(8, Math.min(w - 255, uPt.x - 110))}px`;
-      tip.innerHTML = `
-      `;
+      tip.textContent = "PCI " + (state.servingCell.pci) + " | " + (state.servingCell.band || "---");
     };
 
-    document.getElementById("rt-map-center-now").addEventListener("click", () => {
+    var _cn = document.getElementById("rt-map-center-now"); if (_cn) _cn.addEventListener("click", () => {
       centered = true;
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(p => {
@@ -1692,982 +1641,60 @@ if (window.__rtStableV41) return;
   }, 1000);
 })();</script>
 
+<script id="rt-persist-exit">
+/* Persistence + clean exit (single, idempotent block) */
+(function () {
+  if (window.__rtPersistExit) return;
+  window.__rtPersistExit = true;
+  var bridge = function () { return window.AndroidModem || null; };
 
-<script id="rt-rf-live-logger-v41">
-(function() {
-  if (window.__rtRfLiveLoggerV41) return;
-  window.__rtRfLiveLoggerV41 = true;
-
-  var prevFn = window.onRealModemData;
-  var lastRfPush = 0;
-
-  window.onRealModemData = function(data) {
-    var ret;
-    if (typeof prevFn === "function") {
-      ret = prevFn.apply(this, arguments);
-    }
+  window.rtPersistFullStateNow = function () {
     try {
-      var now = Date.now();
-      if (now - lastRfPush >= 1200 && typeof window.addLog === "function" && window.state) {
-        lastRfPush = now;
-        var sc = window.state.servingCell || {};
-        var rf = window.state.rf || {};
-        var rsrpStr = (typeof rf.rsrp === "number" && !Number.isNaN(rf.rsrp)) ? rf.rsrp.toFixed(1) + " dBm" : "--";
-        var rsrqStr = (typeof rf.rsrq === "number" && !Number.isNaN(rf.rsrq)) ? rf.rsrq.toFixed(1) + " dB" : "--";
-        var sinrStr = (typeof rf.sinr === "number" && !Number.isNaN(rf.sinr)) ? rf.sinr.toFixed(1) + " dB" : "--";
-        var techStr = sc.tech || window.state.activeRat || "CELL";
-        var pciStr = (sc.pci !== undefined && sc.pci !== null && sc.pci !== "---") ? sc.pci : "--";
-        var bandStr = (sc.band && sc.band !== "---") ? sc.band : "--";
-        window.addLog(
-          "RF",
-          "LIVE",
-          techStr + " PCI:" + pciStr + " | " + bandStr,
-          "RSRP: " + rsrpStr + " | RSRQ: " + rsrqStr + " | SINR: " + sinrStr
-        );
-      }
-    } catch (_err) {}
-    return ret;
-  };
-  window.onRealModemData._rtRfLogHook = true;
-})();
-</script>
-
-
-<script id="rt-rf-report-ensure-v1">
-/* RT_RF_REPORT_ENSURE_V1 */
-(function() {
-  if (window.__rtRfReportEnsureV1) return;
-  window.__rtRfReportEnsureV1 = true;
-  var lastLogTime = 0;
-  function emitRfLog(raw) {
-    try {
-      if (typeof window.addLog !== "function") return;
-      var now = Date.now();
-      if (now - lastLogTime < 1000) return;
-      lastLogTime = now;
-      var st = window.state || {};
-      var sc = st.servingCell || {};
-      var rf = st.rf || {};
-      var d = (raw && typeof raw === "object") ? raw : {};
-      var rsrp = (typeof rf.rsrp === "number") ? rf.rsrp : (typeof d.rsrp === "number" ? d.rsrp : null);
-      var rsrq = (typeof rf.rsrq === "number") ? rf.rsrq : (typeof d.rsrq === "number" ? d.rsrq : null);
-      var sinr = (typeof rf.sinr === "number") ? rf.sinr : (typeof d.sinr === "number" ? d.sinr : null);
-      var tech = sc.tech || d.tech || st.activeRat || "CELL";
-      var pci = (sc.pci !== undefined && sc.pci !== null && sc.pci !== "---") ? sc.pci : (d.pci ?? "--");
-      var band = (sc.band && sc.band !== "---") ? sc.band : (d.band || "--");
-      var rsrpTxt = (typeof rsrp === "number") ? rsrp.toFixed(1) + " dBm" : "--";
-      var rsrqTxt = (typeof rsrq === "number") ? rsrq.toFixed(1) + " dB" : "--";
-      var sinrTxt = (typeof sinr === "number") ? sinr.toFixed(1) + " dB" : "--";
-      window.addLog("RF", "MODEM", tech + " PCI:" + pci + " | " + band, "RSRP: " + rsrpTxt + " | RSRQ: " + rsrqTxt + " | SINR: " + sinrTxt);
-    } catch (_e) {}
-  }
-  var origModem = window.onRealModemData;
-  window.onRealModemData = function(payload) {
-    var res = (typeof origModem === "function") ? origModem.apply(this, arguments) : undefined;
-    emitRfLog(payload);
-    return res;
-  };
-  window.onRealModemData._rtRfLogHook = true;
-})();
-</script>
-
-
-<script id="rt-rf-stream-force-render-v2">
-/* RT_RF_STREAM_FORCE_RENDER_V2 */
-(function() {
-  if (window.__rtRfStreamForceRenderV2) return;
-  window.__rtRfStreamForceRenderV2 = true;
-
-  var lastPushTs = 0;
-
-  function pushRfSample(payload) {
-    try {
-      if (typeof window.addLog !== "function") return;
-      var now = Date.now();
-      if (now - lastPushTs < 900) return;
-      lastPushTs = now;
-
-      var st = window.state || {};
-      var sc = st.servingCell || {};
-      var rf = st.rf || {};
-      var d = (payload && typeof payload === "object") ? payload : {};
-
-      var rsrp = (typeof rf.rsrp === "number") ? rf.rsrp : (typeof d.rsrp === "number" ? d.rsrp : null);
-      var rsrq = (typeof rf.rsrq === "number") ? rf.rsrq : (typeof d.rsrq === "number" ? d.rsrq : null);
-      var sinr = (typeof rf.sinr === "number") ? rf.sinr : (typeof d.sinr === "number" ? d.sinr : null);
-
-      var tech = sc.tech || d.tech || st.activeRat || "CELL";
-      var pci = (sc.pci !== undefined && sc.pci !== null && sc.pci !== "---") ? sc.pci : (d.pci !== undefined ? d.pci : "--");
-      var band = (sc.band && sc.band !== "---") ? sc.band : (d.band || "--");
-
-      var rsrpStr = (typeof rsrp === "number") ? rsrp.toFixed(1) + " dBm" : "--";
-      var rsrqStr = (typeof rsrq === "number") ? rsrq.toFixed(1) + " dB" : "--";
-      var sinrStr = (typeof sinr === "number") ? sinr.toFixed(1) + " dB" : "--";
-
-      window.addLog(
-        "RF",
-        "MODEM",
-        tech + " PCI:" + pci + " | " + band,
-        "RSRP: " + rsrpStr + " | RSRQ: " + rsrqStr + " | SINR: " + sinrStr
-      );
-
-      if (typeof window.renderLogs === "function") {
-        window.renderLogs();
-      }
-    } catch (_e) {}
-  }
-
-  function wrapModemFn() {
-    var cur = window.onRealModemData;
-    if (typeof cur === "function" && !cur._rtRfForceV2) {
-      var wrapped = function() {
-        var ret = cur.apply(this, arguments);
-        pushRfSample(arguments[0]);
-        return ret;
-      };
-      wrapped._rtRfForceV2 = true;
-      wrapped._rtRfLogHook = true;
-      window.onRealModemData = wrapped;
-    }
-  }
-
-  wrapModemFn();
-  setInterval(wrapModemFn, 1500);
-})();
-</script>
-
-
-<script id="rt-rf-diag-test-v1">
-/* RT_RF_DIAG_TEST_V1 */
-(function() {
-  if (window.__rtRfDiagTestV1) return;
-  window.__rtRfDiagTestV1 = true;
-
-  window.__rtDiagPushRf = function(tag) {
-    try {
-      var label = tag || "DIAG_TEST";
-      if (typeof window.addLog === "function") {
-        window.addLog(
-          "RF",
-          label,
-          "LTE/NR PCI:101 | B3",
-          "RSRP: -85.0 dBm | RSRQ: -10.5 dB | SINR: 12.0 dB"
-        );
-      }
-      if (typeof window.state === "object" && window.state) {
-        if (window.state.logFilter !== "RF" && window.state.logFilter !== "ALL") {
-          window.state.logFilter = "RF";
-        }
-      }
-      if (typeof window.renderLogs === "function") {
-        window.renderLogs();
-      }
-      return {
-        logsCount: (window.state && Array.isArray(window.state.logs)) ? window.state.logs.length : -1,
-        rfCount: (window.state && Array.isArray(window.state.logs))
-          ? window.state.logs.filter(function(x) { return x && x.category === "RF"; }).length
-          : -1,
-        logFilter: window.state ? window.state.logFilter : null
-      };
-    } catch (e) {
-      return { error: String(e) };
-    }
-  };
-})();
-</script>
-
-
-<script id="rt-expose-window-log-fns-v3">
-/* RT_EXPOSE_WINDOW_LOG_FNS_V3 */
-(function() {
-  if (window.__rtExposeWindowLogFnsV3) return;
-  window.__rtExposeWindowLogFnsV3 = true;
-
-  if (typeof addLog === "function") {
-    window.addLog = addLog;
-  }
-  if (typeof renderLogs === "function") {
-    window.renderLogs = renderLogs;
-  }
-  if (typeof setLogFilter === "function" && !window.setLogFilter._rtWrap) {
-    var origSetFilter = setLogFilter;
-    window.setLogFilter = function(f) {
-      var r = origSetFilter.apply(this, arguments);
-      try {
-        if (f === "RF" && typeof window.addLog === "function" && window.state && Array.isArray(window.state.logs)) {
-          var hasRf = window.state.logs.some(function(x) { return x && x.category === "RF"; });
-          if (!hasRf) {
-            var sc = window.state.servingCell || {};
-            var rf = window.state.rf || {};
-            var rsrp = (typeof rf.rsrp === "number") ? rf.rsrp.toFixed(1) + " dBm" : "--";
-            var rsrq = (typeof rf.rsrq === "number") ? rf.rsrq.toFixed(1) + " dB" : "--";
-            var sinr = (typeof rf.sinr === "number") ? rf.sinr.toFixed(1) + " dB" : "--";
-            var title = (sc.tech || window.state.activeRat || "CELL") + " PCI:" + (sc.pci ?? "--") + " | " + (sc.band || "---");
-            window.addLog("RF", "MODEM", title, "RSRP: " + rsrp + " | RSRQ: " + rsrq + " | SINR: " + sinr);
-            if (typeof window.renderLogs === "function") window.renderLogs();
-          }
-        }
-      } catch (_e) {}
-      return r;
-    };
-    window.setLogFilter._rtWrap = true;
-  }
-})();
-</script>
-
-
-<script id="rt-rf-direct-live-v4">
-/* RT_RF_DIRECT_LIVE_V4 */
-(function() {
-  if (window.__rtRfDirectLiveV4) return;
-  window.__rtRfDirectLiveV4 = true;
-
-  var lastRfEntryTs = 0;
-
-  function emitLiveRfLog(sourceTag) {
-    try {
-      var addFn = (typeof window.addLog === "function") ? window.addLog : (typeof addLog === "function" ? addLog : null);
-      var renderFn = (typeof window.renderLogs === "function") ? window.renderLogs : (typeof renderLogs === "function" ? renderLogs : null);
-      var st = window.state || (typeof state !== "undefined" ? state : null);
-      if (!addFn || !st) return;
-
-      st.logs = Array.isArray(st.logs) ? st.logs : [];
-      var sc = st.servingCell || {};
-      var rf = st.rf || {};
-
-      var rsrpStr = (typeof rf.rsrp === "number" && Number.isFinite(rf.rsrp)) ? rf.rsrp.toFixed(1) + " dBm" : "--";
-      var rsrqStr = (typeof rf.rsrq === "number" && Number.isFinite(rf.rsrq)) ? rf.rsrq.toFixed(1) + " dB" : "--";
-      var sinrStr = (typeof rf.sinr === "number" && Number.isFinite(rf.sinr)) ? rf.sinr.toFixed(1) + " dB" : "--";
-
-      var tech = (sc.tech && sc.tech !== "---") ? sc.tech : (st.activeRat || "CELL");
-      var pci = (sc.pci !== undefined && sc.pci !== null && sc.pci !== "---") ? sc.pci : "--";
-      var band = (sc.band && sc.band !== "---") ? sc.band : "--";
-
-      addFn(
-        "RF",
-        sourceTag || "LIVE",
-        tech + " PCI:" + pci + " | " + band,
-        "RSRP: " + rsrpStr + " | RSRQ: " + rsrqStr + " | SINR: " + sinrStr
-      );
-
-      if (renderFn) renderFn();
-    } catch (_e) {}
-  }
-
-  window.__rtEmitLiveRfNow = function(tag) {
-    emitLiveRfLog(tag || "MANUAL");
-  };
-
-  function hookModemHandler() {
-    var fn = window.onRealModemData;
-    if (typeof fn === "function" && !fn._rtRfDirectV4) {
-      var wrapped = function() {
-        var res = fn.apply(this, arguments);
-        var now = Date.now();
-        if (now - lastRfEntryTs >= 1000) {
-          lastRfEntryTs = now;
-          emitLiveRfLog("MODEM");
-        }
-        return res;
-      };
-      wrapped._rtRfDirectV4 = true;
-      window.onRealModemData = wrapped;
-    }
-  }
-
-  hookModemHandler();
-  setInterval(hookModemHandler, 1000);
-
-  if (typeof window.setLogFilter === "function" && !window.setLogFilter._rtRfDirectFilter) {
-    var origFilter = window.setLogFilter;
-    window.setLogFilter = function(f) {
-      var res = origFilter.apply(this, arguments);
-      try {
-        var st = window.state || (typeof state !== "undefined" ? state : null);
-        if (f === "RF" && st) {
-          var hasRf = Array.isArray(st.logs) && st.logs.some(function(x) { return x && x.category === "RF"; });
-          if (!hasRf) {
-            emitLiveRfLog("FILTER_RF");
-          } else if (typeof window.renderLogs === "function") {
-            window.renderLogs();
-          }
-        }
-      } catch (_e) {}
-      return res;
-    };
-    window.setLogFilter._rtRfDirectFilter = true;
-  }
-})();
-</script>
-
-
-<script id="rt-rf-stream-v5-guaranteed">
-/* RT_RF_STREAM_V5_GUARANTEED */
-(function() {
-  if (window.__rtRfStreamV5Guaranteed) return;
-  window.__rtRfStreamV5Guaranteed = true;
-
-  var lastRecordedSig = "";
-  var lastRecordedAt = 0;
-
-  function formatRfSnapshot() {
-    var st = window.state || (typeof state !== "undefined" ? state : null);
-    var sc = (st && st.servingCell) ? st.servingCell : {};
-    var rf = (st && st.rf) ? st.rf : {};
-
-    var rsrp = (typeof rf.rsrp === "number" && Number.isFinite(rf.rsrp)) ? rf.rsrp.toFixed(1) + " dBm" : "--";
-    var rsrq = (typeof rf.rsrq === "number" && Number.isFinite(rf.rsrq)) ? rf.rsrq.toFixed(1) + " dB" : "--";
-    var sinr = (typeof rf.sinr === "number" && Number.isFinite(rf.sinr)) ? rf.sinr.toFixed(1) + " dB" : "--";
-
-    var tech = (sc.tech && sc.tech !== "---") ? sc.tech : ((st && st.activeRat) ? st.activeRat : "CELL");
-    var pci = (sc.pci !== undefined && sc.pci !== null && sc.pci !== "---") ? sc.pci : "--";
-    var band = (sc.band && sc.band !== "---") ? sc.band : "--";
-
-    return {
-      title: tech + " PCI:" + pci + " | " + band,
-      summary: "RSRP: " + rsrp + " | RSRQ: " + rsrq + " | SINR: " + sinr,
-      hasMetric: (typeof rf.rsrp === "number" && Number.isFinite(rf.rsrp)) || (pci !== "--")
-    };
-  }
-
-  function updateDiagBar() {
-    try {
-      var st = window.state || (typeof state !== "undefined" ? state : null);
-      var logs = (st && Array.isArray(st.logs)) ? st.logs : [];
-      var rfCount = logs.filter(function(x) { return x && x.category === "RF"; }).length;
-      var filter = (st && st.logFilter) ? st.logFilter : "ALL";
-      var snap = formatRfSnapshot();
-
-      var cEl = document.getElementById("rt-rf-diag-counts");
-      var lEl = document.getElementById("rt-rf-diag-last");
-      if (cEl) cEl.textContent = "RF: " + rfCount + " | Logs: " + logs.length + " | Filter: " + filter;
-      if (lEl) lEl.textContent = snap.title + " • " + snap.summary;
-    } catch (_e) {}
-  }
-
-  function pushRfNow(tag) {
-    try {
-      var addFn = (typeof window.addLog === "function") ? window.addLog : (typeof addLog === "function" ? addLog : null);
-      var renderFn = (typeof window.renderLogs === "function") ? window.renderLogs : (typeof renderLogs === "function" ? renderLogs : null);
-      var st = window.state || (typeof state !== "undefined" ? state : null);
-      if (!addFn || !st) return;
-
-      st.logs = Array.isArray(st.logs) ? st.logs : [];
-      var snap = formatRfSnapshot();
-      var sig = snap.title + "|" + snap.summary;
-      var now = Date.now();
-
-      if (sig !== lastRecordedSig || (now - lastRecordedAt) >= 2000) {
-        lastRecordedSig = sig;
-        lastRecordedAt = now;
-        addFn("RF", tag || "MODEM", snap.title, snap.summary);
-        if (renderFn) renderFn();
-      }
-      updateDiagBar();
-    } catch (_e) {}
-  }
-
-  setInterval(function() {
-    try {
-      var st = window.state || (typeof state !== "undefined" ? state : null);
-      var snap = formatRfSnapshot();
-      if (st && (snap.hasMetric || (st.sampleCount && st.sampleCount > 0))) {
-        pushRfNow("STREAM");
-      } else {
-        updateDiagBar();
-      }
-    } catch (_e) {}
-  }, 1200);
-
-  if (typeof window.renderLogs === "function" && !window.renderLogs._rtV5Bar) {
-    var origRender = window.renderLogs;
-    window.renderLogs = function() {
-      var r = origRender.apply(this, arguments);
-      updateDiagBar();
-      return r;
-    };
-    window.renderLogs._rtV5Bar = true;
-  }
-
-  if (typeof window.setLogFilter === "function" && !window.setLogFilter._rtV5Filter) {
-    var origSetF = window.setLogFilter;
-    window.setLogFilter = function(f) {
-      var r = origSetF.apply(this, arguments);
-      if (f === "RF") {
-        pushRfNow("FILTER_RF");
-      } else {
-        updateDiagBar();
-      }
-      return r;
-    };
-    window.setLogFilter._rtV5Filter = true;
-  }
-
-  updateDiagBar();
-})();
-</script>
-
-
-<script id="rt-rf-stream-v6-direct-dom">
-/* RT_RF_STREAM_V6_DIRECT_DOM */
-(function() {
-  if (window.__rtRfStreamV6DirectDom) return;
-  window.__rtRfStreamV6DirectDom = true;
-
-  var lastPushMs = 0;
-
-  function getAppState() {
-    if (window.state && typeof window.state === "object") return window.state;
-    try {
-      if (typeof state !== "undefined" && state && typeof state === "object") {
-        window.state = state;
-        return state;
-      }
-    } catch (_e) {}
-    return null;
-  }
-
-  function extractRfFromDomAndState() {
-    var st = getAppState();
-    var sc = (st && st.servingCell) ? st.servingCell : {};
-    var rf = (st && st.rf) ? st.rf : {};
-
-    var rsrpVal = (typeof rf.rsrp === "number" && Number.isFinite(rf.rsrp)) ? rf.rsrp : null;
-    var rsrqVal = (typeof rf.rsrq === "number" && Number.isFinite(rf.rsrq)) ? rf.rsrq : null;
-    var sinrVal = (typeof rf.sinr === "number" && Number.isFinite(rf.sinr)) ? rf.sinr : null;
-
-    if (rsrpVal === null) {
-      var elRsrp = document.getElementById("val-rsrp");
-      if (elRsrp && elRsrp.textContent) {
-        var n1 = parseFloat(elRsrp.textContent.trim());
-        if (Number.isFinite(n1)) rsrpVal = n1;
-      }
-    }
-    if (rsrqVal === null) {
-      var elRsrq = document.getElementById("val-rsrq");
-      if (elRsrq && elRsrq.textContent) {
-        var n2 = parseFloat(elRsrq.textContent.trim());
-        if (Number.isFinite(n2)) rsrqVal = n2;
-      }
-    }
-    if (sinrVal === null) {
-      var elSinr = document.getElementById("val-sinr");
-      if (elSinr && elSinr.textContent) {
-        var n3 = parseFloat(elSinr.textContent.trim());
-        if (Number.isFinite(n3)) sinrVal = n3;
-      }
-    }
-
-    var tech = (sc.tech && sc.tech !== "---") ? sc.tech : ((st && st.activeRat) ? st.activeRat : "4G LTE");
-    var pci = (sc.pci !== undefined && sc.pci !== null && sc.pci !== "---") ? sc.pci : "--";
-    var band = (sc.band && sc.band !== "---") ? sc.band : "--";
-
-    return {
-      st: st,
-      title: tech + " PCI:" + pci + " | " + band,
-      summary:
-        "RSRP: " + (rsrpVal !== null ? rsrpVal.toFixed(1) + " dBm" : "--") +
-        " | RSRQ: " + (rsrqVal !== null ? rsrqVal.toFixed(1) + " dB" : "--") +
-        " | SINR: " + (sinrVal !== null ? sinrVal.toFixed(1) + " dB" : "--"),
-      hasData: (rsrpVal !== null || rsrqVal !== null || sinrVal !== null || pci !== "--")
-    };
-  }
-
-  function syncV6(forceInsert) {
-    try {
-      var info = extractRfFromDomAndState();
-      var st = info.st;
-      var now = Date.now();
-
-      if (st) {
-        st.logs = Array.isArray(st.logs) ? st.logs : [];
-        if (forceInsert || (info.hasData && (now - lastPushMs >= 1500))) {
-          lastPushMs = now;
-          var ts = new Date().toTimeString().split(" ")[0];
-          st.logs.unshift({
-            id: now + Math.random(),
-            timestamp: ts,
-            category: "RF",
-            direction: "MODEM",
-            title: info.title,
-            summary: info.summary
-          });
-          if (st.logs.length > 400) st.logs.pop();
-        }
-      }
-
-      var logsArr = (st && Array.isArray(st.logs)) ? st.logs : [];
-      var rfLogs = logsArr.filter(function(x) { return x && x.category === "RF"; });
-      var filter = (st && st.logFilter) ? st.logFilter : "ALL";
-
-      var cEl = document.getElementById("rt-rf-diag-counts");
-      var lEl = document.getElementById("rt-rf-diag-last");
-      if (cEl) cEl.textContent = "RF: " + rfLogs.length + " | Logs: " + logsArr.length + " | Filter: " + filter;
-      if (lEl) lEl.textContent = info.title + " • " + info.summary;
-
-      var streamEl = document.getElementById("log-stream");
-      var viewLogs = document.getElementById("view-logs");
-      if (streamEl && viewLogs && !viewLogs.classList.contains("hidden")) {
-        if (typeof window.renderLogs === "function") {
-          window.renderLogs();
-        } else if (typeof renderLogs === "function") {
-          renderLogs();
-        }
-      }
-    } catch (_e) {}
-  }
-
-  var btnRf = document.getElementById("filter-RF");
-  if (btnRf && !btnRf._rtV6Click) {
-    btnRf.addEventListener("click", function() {
-      setTimeout(function() { syncV6(true); }, 30);
-    });
-    btnRf._rtV6Click = true;
-  }
-
-  setInterval(function() {
-    syncV6(false);
-  }, 1500);
-
-  setTimeout(function() {
-    syncV6(true);
-  }, 600);
-})();
-</script>
-
-
-<script id="rt-rf-v7-and-exit-save">
-/* RT_RF_V7_AND_EXIT_SAVE */
-(function() {
-  if (window.__rtRfV7AndExitSave) return;
-  window.__rtRfV7AndExitSave = true;
-
-  var lastSamplePush = 0;
-
-  function resolveState() {
-    if (window.state && typeof window.state === "object") return window.state;
-    try {
-      if (typeof state !== "undefined" && state && typeof state === "object") {
-        window.state = state;
-        return state;
-      }
-    } catch (_e) {}
-    return null;
-  }
-
-  function getRfMetrics() {
-    var st = resolveState();
-    var sc = (st && st.servingCell) ? st.servingCell : {};
-    var rf = (st && st.rf) ? st.rf : {};
-
-    function readNum(stateVal, elId) {
-      if (typeof stateVal === "number" && Number.isFinite(stateVal)) return stateVal;
-      var el = document.getElementById(elId);
-      if (el && el.textContent) {
-        var parsed = parseFloat(el.textContent.replace(/[^0-9.+-]/g, ""));
-        if (Number.isFinite(parsed)) return parsed;
-      }
-      return null;
-    }
-
-    var rsrp = readNum(rf.rsrp, "val-rsrp");
-    var rsrq = readNum(rf.rsrq, "val-rsrq");
-    var sinr = readNum(rf.sinr, "val-sinr");
-    var rssi = readNum(rf.rssi, "val-rssi");
-
-    var tech = (sc.tech && sc.tech !== "---") ? String(sc.tech) : ((st && st.activeRat) ? String(st.activeRat) : "4G LTE");
-    var pci = (sc.pci !== undefined && sc.pci !== null && String(sc.pci) !== "---") ? String(sc.pci) : "--";
-    var band = (sc.band && sc.band !== "---") ? String(sc.band) : "--";
-
-    var nowStr = new Date().toTimeString().split(" ")[0];
-    var title = tech + " PCI:" + pci + " | " + band;
-    var summary =
-      "RSRP: " + (rsrp !== null ? rsrp.toFixed(1) + " dBm" : "--") +
-      " | RSRQ: " + (rsrq !== null ? rsrq.toFixed(1) + " dB" : "--") +
-      " | SINR: " + (sinr !== null ? sinr.toFixed(1) + " dB" : "--") +
-      (rssi !== null ? " | RSSI: " + rssi.toFixed(1) + " dBm" : "");
-
-    return {
-      st: st,
-      timestamp: nowStr,
-      title: title,
-      summary: summary,
-      hasLive: (rsrp !== null || rsrq !== null || sinr !== null || pci !== "--")
-    };
-  }
-
-  function appendRfRecordIfNeeded(force) {
-    var m = getRfMetrics();
-    var st = m.st;
-    if (!st) return m;
-    st.logs = Array.isArray(st.logs) ? st.logs : [];
-    var now = Date.now();
-    if (force || (m.hasLive && (now - lastSamplePush >= 1500))) {
-      lastSamplePush = now;
-      st.logs.unshift({
-        id: now + Math.random(),
-        timestamp: m.timestamp,
-        category: "RF",
-        direction: "MODEM",
-        title: m.title,
-        summary: m.summary
-      });
-      if (st.logs.length > 400) st.logs.pop();
-    }
-    return m;
-  }
-
-  function isRfFilterSelected() {
-    var st = resolveState();
-    if (st && st.logFilter === "RF") return true;
-    var btnRf = document.getElementById("filter-RF");
-    if (btnRf && /bg-cyan-600/.test(btnRf.className || "")) return true;
-    return false;
-  }
-
-  function escHtml(v) {
-    return String(v ?? "")
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
-  }
-
-  function renderRfCardsDirect() {
-    var m = appendRfRecordIfNeeded(false);
-    var st = m.st;
-    var logsArr = (st && Array.isArray(st.logs)) ? st.logs : [];
-    var rfList = logsArr.filter(function(item) { return item && item.category === "RF"; });
-
-    if (rfList.length === 0 && m.hasLive) {
-      rfList = [{
-        timestamp: m.timestamp,
-        category: "RF",
-        direction: "MODEM",
-        title: m.title,
-        summary: m.summary
-      }];
-    }
-
-    var filterName = (st && st.logFilter) ? st.logFilter : (isRfFilterSelected() ? "RF" : "ALL");
-    var cEl = document.getElementById("rt-rf-diag-counts");
-    var lEl = document.getElementById("rt-rf-diag-last");
-    if (cEl) cEl.textContent = "RF: " + rfList.length + " | Logs: " + logsArr.length + " | Filter: " + filterName;
-    if (lEl) lEl.textContent = m.title + " • " + m.summary;
-
-    var viewLogs = document.getElementById("view-logs");
-    var stream = document.getElementById("log-stream");
-    if (!stream || !viewLogs || viewLogs.classList.contains("hidden")) return;
-    if (!isRfFilterSelected()) return;
-
-    if (rfList.length === 0) {
-      stream.innerHTML = '<div class="text-slate-400 text-center py-6">ממתין לדגימות RF מהמודם...</div>';
-      return;
-    }
-
-    stream.innerHTML = rfList.slice(0, 120).map(function(log) {
-      return (
-        '<div class="bg-slate-900/95 border border-emerald-700/40 rounded p-2 text-slate-200 space-y-1">' +
-          '<div class="flex items-center justify-between gap-2 text-[11px]">' +
-            '<span class="px-1.5 py-0.5 rounded font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">RF</span>' +
-            '<span class="text-slate-400">' + escHtml(log.direction || "MODEM") + '</span>' +
-            '<span class="text-slate-400 font-mono">' + escHtml(log.timestamp || "") + '</span>' +
-          '</div>' +
-          '<div class="font-bold text-cyan-200 break-all">' + escHtml(log.title || "") + '</div>' +
-          '<div class="text-xs text-emerald-200 font-mono break-all">' + escHtml(log.summary || "") + '</div>' +
-        '</div>'
-      );
-    }).join("");
-  }
-
-  window.rtPersistFullStateNow = function() {
-    try {
-      var st = resolveState();
-      var snapshot = {
+      var b = bridge();
+      if (!b || typeof b.saveStateToDevice !== "function") return false;
+      var st = window.state;
+      b.saveStateToDevice(JSON.stringify({
         savedAt: new Date().toISOString(),
-        servingCell: st ? st.servingCell : {},
-        rf: st ? st.rf : {},
-        liveSamples: (st && Array.isArray(st.liveSamples)) ? st.liveSamples : [],
-        logs: (st && Array.isArray(st.logs)) ? st.logs : []
-      };
-      var jsonStr = JSON.stringify(snapshot);
-      try { localStorage.setItem("rt_monitor_backup_state", jsonStr); } catch (_e) {}
-      if (window.AndroidModem) {
-        if (typeof window.AndroidModem.saveStateToDevice === "function") {
-          window.AndroidModem.saveStateToDevice(jsonStr);
-        }
-        if (typeof window.AndroidModem.saveExportFile === "function") {
-          window.AndroidModem.saveExportFile("cellular_exit_backup_" + Date.now() + ".json", jsonStr);
-        }
-      }
-    } catch (_e) {}
+        logs: st.logs.slice(0, 500),
+        liveSamples: st.liveSamples,
+        sampleCount: st.sampleCount,
+        hoCount: st.hoCount
+      }));
+      return true;
+    } catch (e) { return false; }
   };
 
-  var prevExit = window.rtTriggerCleanExit;
-  window.rtTriggerCleanExit = function() {
-    try { window.rtPersistFullStateNow(); } catch (_e) {}
+  function restore() {
     try {
-      if (window.AndroidModem && typeof window.AndroidModem.exitApp === "function") {
-        window.AndroidModem.exitApp();
-        return;
-      }
-    } catch (_e) {}
-    if (typeof prevExit === "function") {
-      try { prevExit.apply(this, arguments); } catch (_e) {}
-    }
+      var b = bridge();
+      if (!b || typeof b.loadStateFromDevice !== "function") return;
+      var raw = b.loadStateFromDevice();
+      if (!raw) return;
+      var d = JSON.parse(raw), st = window.state;
+      if (Array.isArray(d.logs) && !st.logs.length) st.logs = d.logs;
+      if (Array.isArray(d.liveSamples) && !st.liveSamples.length) st.liveSamples = d.liveSamples;
+      st.sampleCount = Math.max(st.sampleCount || 0, d.sampleCount || 0);
+      st.hoCount = Math.max(st.hoCount || 0, d.hoCount || 0);
+      renderLogs();
+      if (typeof updateLiveUI === "function") updateLiveUI();
+    } catch (e) {}
+  }
+
+  window.rtTriggerCleanExit = function () {
+    try { addLog("SYS", "EXIT", "נתונים נשמרו, סוגר אפליקציה"); } catch (e) {}
+    window.rtPersistFullStateNow();
+    var b = bridge();
+    if (b && typeof b.exitApp === "function") { b.exitApp(); return; }
+    try { window.close(); } catch (e) {}
   };
 
-  ["filter-RF", "filter-ALL", "filter-HO", "filter-SYS", "tab-btn-logs"].forEach(function(id) {
-    var el = document.getElementById(id);
-    if (el && !el._rtV7Bound) {
-      el.addEventListener("click", function() {
-        if (id === "filter-RF") appendRfRecordIfNeeded(true);
-        setTimeout(renderRfCardsDirect, 40);
-        setTimeout(renderRfCardsDirect, 200);
-      });
-      el._rtV7Bound = true;
-    }
+  setInterval(window.rtPersistFullStateNow, 15000);
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "hidden") window.rtPersistFullStateNow();
   });
-
-  setInterval(renderRfCardsDirect, 1200);
-  setTimeout(function() {
-    appendRfRecordIfNeeded(true);
-    renderRfCardsDirect();
-  }, 500);
-})();
-</script>
-
-
-<script id="rt-rf-render-unified-v8">
-/* RT_RF_RENDER_UNIFIED_V8 */
-(function() {
-  if (window.__rtRfRenderUnifiedV8) return;
-  window.__rtRfRenderUnifiedV8 = true;
-
-  function esc(v) {
-    return String(v ?? "")
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
-  }
-
-  function fmtNum(v, unit) {
-    var n = Number(v);
-    return Number.isFinite(n) ? (n.toFixed(1) + (unit ? " " + unit : "")) : "--";
-  }
-
-  function buildSampleRfCards(samples) {
-    if (!Array.isArray(samples) || samples.length === 0) return [];
-    var recent = samples.slice(-80).reverse();
-    return recent.map(function(s) {
-      var tsRaw = String(s.timestamp || "");
-      var ts = tsRaw.includes("T") ? tsRaw.split("T").pop().replace("Z", "").slice(0, 12) : (tsRaw || new Date().toTimeString().split(" ")[0]);
-      var tech = s.tech || s.rat || "CELL";
-      var band = s.band || "---";
-      var pci = (s.cell_id !== undefined && s.cell_id !== null && s.cell_id !== "") ? s.cell_id : "--";
-      var title = tech + " PCI:" + pci + " | " + band;
-      var summary =
-        "RSRP: " + fmtNum(s.rsrp, "dBm") +
-        " | RSRQ: " + fmtNum(s.rsrq, "dB") +
-        " | SINR: " + fmtNum(s.sinr, "dB") +
-        (s.rssi !== undefined && s.rssi !== null ? " | RSSI: " + fmtNum(s.rssi, "dBm") : "");
-      return {
-        category: "RF",
-        direction: "SAMPLE",
-        timestamp: ts,
-        title: title,
-        summary: summary
-      };
-    });
-  }
-
-  function unifiedRenderLogs() {
-    var container = document.getElementById("log-stream");
-    if (!container) return;
-
-    var st = window.state || (typeof state !== "undefined" ? state : null);
-    var activeFilter = (st && st.logFilter) ? st.logFilter : "ALL";
-    var rawLogs = (st && Array.isArray(st.logs)) ? st.logs : [];
-    var activeSamples = (typeof getActiveSamples === "function") ? getActiveSamples() : ((st && Array.isArray(st.liveSamples)) ? st.liveSamples : []);
-    var sampleRfCards = buildSampleRfCards(activeSamples);
-
-    var combined = [];
-    if (activeFilter === "RF") {
-      var rfLogs = rawLogs.filter(function(l) { return l && l.category === "RF"; });
-      combined = rfLogs.concat(sampleRfCards);
-    } else if (activeFilter === "ALL") {
-      combined = rawLogs.concat(sampleRfCards.slice(0, 25));
-    } else {
-      combined = rawLogs.filter(function(l) { return l && l.category === activeFilter; });
-    }
-
-    var rfTotalCount = rawLogs.filter(function(l) { return l && l.category === "RF"; }).length + sampleRfCards.length;
-    var cEl = document.getElementById("rt-rf-diag-counts");
-    var lEl = document.getElementById("rt-rf-diag-last");
-    if (cEl) cEl.textContent = "RF: " + rfTotalCount + " | Samples: " + (Array.isArray(activeSamples) ? activeSamples.length : 0) + " | Filter: " + activeFilter;
-    if (lEl && sampleRfCards.length > 0) lEl.textContent = sampleRfCards[0].title + " • " + sampleRfCards[0].summary;
-
-    if (combined.length === 0) {
-      container.innerHTML = '<div class="text-slate-500 text-center py-6">אין רשומות להצגה בקטגוריה זו.</div>';
-      return;
-    }
-
-    container.innerHTML = combined.map(function(log) {
-      var badge = log.category === "HO"
-        ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
-        : (log.category === "RF" ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40" : "bg-amber-500/20 text-amber-300 border border-amber-500/30");
-      var borderCol = log.category === "RF" ? "border-emerald-800/50" : "border-slate-800";
-      return (
-        '<div class="bg-slate-900/90 border ' + borderCol + ' rounded p-2 text-slate-200 space-y-1">' +
-          '<div class="flex items-center justify-between gap-2 text-[11px]">' +
-            '<span class="px-1.5 py-0.5 rounded font-bold ' + badge + '">' + esc(log.category || "SYS") + '</span>' +
-            '<span class="text-slate-400">' + esc(log.direction || "") + '</span>' +
-            '<span class="text-slate-500 font-mono">' + esc(log.timestamp || "") + '</span>' +
-          '</div>' +
-          '<div class="font-semibold text-cyan-200 break-all">' + esc(log.title || "") + '</div>' +
-          '<div class="text-xs text-slate-300 break-all">' + esc(log.summary || "") + '</div>' +
-        '</div>'
-      );
-    }).join("");
-  }
-
-  window.renderLogs = unifiedRenderLogs;
-  try { renderLogs = unifiedRenderLogs; } catch (_e) {}
-
-  setInterval(function() {
-    var viewLogs = document.getElementById("view-logs");
-    if (viewLogs && !viewLogs.classList.contains("hidden")) {
-      unifiedRenderLogs();
-    }
-  }, 1000);
-})();
-</script>
-
-
-<script id="rt-rf-stage-injector-v9">
-/* RT_RF_STAGE_INJECTOR_V9 */
-(function() {
-  if (window.__rtRfStageInjectorV9) return;
-  window.__rtRfStageInjectorV9 = true;
-
-  var seq = 900;
-
-  function setProbeStatus(msg) {
-    var el = document.getElementById("rt-probe-v9-status");
-    if (el) el.textContent = msg;
-  }
-
-  function fakePayload(stageNum) {
-    seq += 1;
-    var pci = 100 + (seq % 50);
-    var rsrp = -75 - (seq % 25);
-    var rsrq = -8 - (seq % 9);
-    var sinr = 2 + (seq % 18);
-    return {
-      plmn: "425-02 (Cellcom IL)",
-      timestamp: Date.now(),
-      servingCell: {
-        rat: "4G",
-        tech: "4G LTE",
-        band: "B3",
-        pci: pci,
-        gnb: 12000 + stageNum,
-        arfcn: 1400,
-        tac: 921,
-        ta: 5,
-        rsrp: rsrp,
-        rsrq: rsrq,
-        sinr: sinr,
-        rssi: rsrp + 18
-      },
-      neighbors: []
-    };
-  }
-
-  window.__rtProbeRunStage = function(stageNum) {
-    var st = window.state || (typeof state !== "undefined" ? state : null);
-    var payload = fakePayload(stageNum);
-    var sc = payload.servingCell;
-    var ts = new Date().toTimeString().split(" ")[0];
-    var title = sc.tech + " PCI:" + sc.pci + " | " + sc.band + " [S" + stageNum + "]";
-    var summary = "RSRP: " + sc.rsrp.toFixed(1) + " dBm | RSRQ: " + sc.rsrq.toFixed(1) + " dB | SINR: " + sc.sinr.toFixed(1) + " dB";
-
-    try {
-      if (stageNum === 1) {
-        if (typeof window.onRealModemData !== "function") {
-          setProbeStatus("S1 ERR: onRealModemData missing");
-          return;
-        }
-        window.onRealModemData(payload);
-        var logsLen1 = (st && Array.isArray(st.logs)) ? st.logs.length : -1;
-        var sampLen1 = (st && Array.isArray(st.liveSamples)) ? st.liveSamples.length : -1;
-        setProbeStatus("S1 OK -> logs=" + logsLen1 + " samp=" + sampLen1 + " rf=" + (st && st.rf ? st.rf.rsrp : "no"));
-        return;
-      }
-
-      if (stageNum === 2) {
-        if (!st) {
-          setProbeStatus("S2 ERR: state missing");
-          return;
-        }
-        st.servingCell = Object.assign({}, st.servingCell || {}, sc);
-        st.rf = Object.assign({}, st.rf || {}, { rsrp: sc.rsrp, rsrq: sc.rsrq, sinr: sc.sinr, rssi: sc.rssi });
-        st.liveSamples = Array.isArray(st.liveSamples) ? st.liveSamples : [];
-        st.liveSamples.push({
-          timestamp: new Date().toISOString(),
-          rat: sc.rat,
-          tech: sc.tech,
-          band: sc.band,
-          plmn: payload.plmn,
-          cell_id: sc.pci,
-          arfcn: sc.arfcn,
-          tac: sc.tac,
-          rsrp: sc.rsrp,
-          rsrq: sc.rsrq,
-          sinr: sc.sinr,
-          rssi: sc.rssi
-        });
-        if (typeof window.renderLogs === "function") window.renderLogs();
-        setProbeStatus("S2 OK -> samp=" + st.liveSamples.length + " rsrp=" + st.rf.rsrp);
-        return;
-      }
-
-      if (stageNum === 3) {
-        var addFn = (typeof window.addLog === "function") ? window.addLog : (typeof addLog === "function" ? addLog : null);
-        var renFn = (typeof window.renderLogs === "function") ? window.renderLogs : (typeof renderLogs === "function" ? renderLogs : null);
-        if (!addFn) {
-          setProbeStatus("S3 ERR: addLog missing");
-          return;
-        }
-        addFn("RF", "PROBE_S3", title, summary);
-        if (renFn) renFn();
-        var rfCnt3 = (st && Array.isArray(st.logs)) ? st.logs.filter(function(x) { return x && x.category === "RF"; }).length : -1;
-        setProbeStatus("S3 OK -> rfLogs=" + rfCnt3 + " ren=" + Boolean(renFn));
-        return;
-      }
-
-      if (stageNum === 4) {
-        var container = document.getElementById("log-stream");
-        if (!container) {
-          setProbeStatus("S4 ERR: #log-stream missing");
-          return;
-        }
-        var cardHtml =
-          '<div class="bg-slate-900 border border-emerald-500/60 rounded p-2 text-slate-100 space-y-1">' +
-            '<div class="flex items-center justify-between text-[11px] font-mono">' +
-              '<span class="px-1.5 py-0.5 rounded font-bold bg-emerald-500/20 text-emerald-300">RF</span>' +
-              '<span class="text-amber-300">PROBE_S4</span>' +
-              '<span class="text-slate-400">' + ts + '</span>' +
-            '</div>' +
-            '<div class="font-bold text-cyan-300">' + title + '</div>' +
-            '<div class="text-xs text-emerald-200 font-mono">' + summary + '</div>' +
-          '</div>';
-        container.insertAdjacentHTML("afterbegin", cardHtml);
-        setProbeStatus("S4 OK -> children=" + container.children.length + " hidden=" + container.offsetParent === null);
-      }
-    } catch (e) {
-      setProbeStatus("S" + stageNum + " EX: " + (e && e.message ? e.message : String(e)));
-    }
-  };
+  window.addEventListener("pagehide", window.rtPersistFullStateNow);
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", restore);
+  else restore();
 })();
 </script>
 

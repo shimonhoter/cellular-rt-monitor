@@ -368,6 +368,13 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    override fun onPause() {
+        super.onPause()
+        if (::webView.isInitialized) {
+            webView.evaluateJavascript("window.rtPersistFullStateNow && window.rtPersistFullStateNow()", null)
+        }
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         Shizuku.removeRequestPermissionResultListener(shizukuPermissionListener)
