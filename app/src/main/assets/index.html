@@ -39,33 +39,25 @@
     <div id="toast-container" class="fixed top-12 left-2 z-50 flex flex-col gap-1.5 max-w-xs w-full pointer-events-none"></div>
 
     <!-- Compact Top Header & Navigation Tabs -->
-    <header class="bg-slate-900 border-b border-slate-800 px-2.5 py-1.5 shrink-0 z-40">
-        <div class="flex items-center justify-between gap-1.5">
-            <!-- Title & HW Status -->
-            <div class="flex items-center gap-1.5">
-                <span class="text-cyan-400 font-black text-sm tracking-tight">RT-MON <span class="text-[10px] text-slate-400 font-normal">v4.1</span></span>
+    <header class="bg-slate-900 border-b border-slate-800 px-2 pt-1.5 pb-1 shrink-0 z-40">
+        <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-1.5 min-w-0">
+                <span class="text-cyan-400 font-black text-sm tracking-tight leading-none">RT-MON<span class="text-[9px] text-slate-500 font-normal mr-1">v4.2</span></span>
                 <span id="status-badge" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
                     <span id="status-dot" class="w-1.5 h-1.5 rounded-full bg-amber-400 live-dot"></span>
                     <span id="status-text">WAITING HW</span>
                 </span>
             </div>
-
-            <!-- Top-left Exit & Help (4636 inside Help) + Shizuku -->
             <div class="flex items-center gap-1">
-                <button type="button" id="rt-explicit-exit-btn" onclick="rtTriggerCleanExit()" class="px-2 py-0.5 rounded text-[10px] font-bold bg-red-700/90 hover:bg-red-600 text-white border border-red-400/60">
-                    יציאה
+                <button type="button" onclick="openShizukuModal()" id="btn-shizuku-status" class="h-7 px-2 rounded-full text-[10px] font-bold inline-flex items-center gap-1 bg-amber-500/15 text-amber-300 border border-amber-500/40" title="מצב חיבור Shizuku">
+                    <span id="shizuku-dot" class="w-1.5 h-1.5 rounded-full bg-amber-400"></span><span id="shizuku-label">Shizuku</span>
                 </button>
-                <button type="button" id="rt-help-menu-btn" onclick="rtOpenHelpWith4636()" class="px-2 py-0.5 rounded text-[10px] font-bold bg-cyan-600/30 hover:bg-cyan-600/50 text-cyan-200 border border-cyan-500/50 flex items-center gap-0.5" title="עזרה ותפריט טכנאי 4636">
-                    <span>❓</span> עזרה
-                </button>
-                <button onclick="openShizukuModal()" id="btn-shizuku-status" class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
-                    ⚡ Shizuku
-                </button>
+                <button type="button" id="rt-help-menu-btn" onclick="rtOpenHelpWith4636()" class="h-7 w-7 rounded-full text-xs bg-slate-800 hover:bg-slate-700 text-cyan-200 border border-slate-700 inline-flex items-center justify-center" title="עזרה ותפריט טכנאי 4636">❓</button>
+                <button type="button" id="rt-explicit-exit-btn" onclick="rtTriggerCleanExit()" class="h-7 w-7 rounded-full text-xs bg-red-700/90 hover:bg-red-600 text-white border border-red-400/60 inline-flex items-center justify-center" title="שמור וצא">⏻</button>
             </div>
         </div>
 
-        <!-- 4 Main Navigation Tabs -->
-        <nav class="grid grid-cols-5 gap-1 mt-1.5 bg-slate-950 p-0.5 rounded-lg border border-slate-800 text-[10px] font-bold">
+        <nav class="grid grid-cols-5 gap-0.5 mt-1.5 bg-slate-950 p-0.5 rounded-lg border border-slate-800 text-[10px] font-bold">
             <button onclick="switchTab('live')" id="tab-btn-live" class="tab-btn py-1 rounded-md bg-cyan-600 text-white transition">📡 נתונים חיים</button>
             <button type="button" onclick="rtSwitchToMapTab()" id="tab-btn-map" class="tab-btn py-1 rounded-md text-slate-400 hover:text-white transition">🗺️ מפה</button>
             <button onclick="switchTab('logs')" id="tab-btn-logs" class="tab-btn py-1 rounded-md text-slate-400 hover:text-white transition">📜 לוג וייצוא</button>
@@ -79,18 +71,26 @@
     <!-- ===================================================================== -->
     <main id="view-live" class="tab-view flex-1 flex flex-col justify-between p-2 gap-1.5 overflow-hidden">
 
-        <!-- Row 1: RAT Lock & Airplane Mode Control Strip -->
-        <div class="flex items-center justify-between gap-1.5 bg-slate-900 border border-slate-800 rounded-lg p-1.5 shrink-0">
-            <div class="flex items-center gap-0.5 text-[11px]" title="בחירת דורות מותרים (ניתן לבחור כמה)">
-                <button onclick="setAllGens()" id="rat-AUTO" class="rat-btn px-2 py-1 rounded font-bold bg-cyan-600 text-white">הכל</button>
-                <button onclick="toggleGen('5G')" id="rat-5G" class="rat-btn px-2 py-1 rounded font-medium text-slate-300">5G</button>
-                <button onclick="toggleGen('4G')" id="rat-4G" class="rat-btn px-2 py-1 rounded font-medium text-slate-300">4G</button>
-                <button onclick="toggleGen('3G')" id="rat-3G" class="rat-btn px-2 py-1 rounded font-medium text-slate-300">3G</button>
-                <button onclick="toggleGen('2G')" id="rat-2G" class="rat-btn px-2 py-1 rounded font-medium text-slate-300">2G</button>
+        <!-- Row 1: controls (generations / airplane / handover beep) -->
+        <div class="grid grid-cols-[1fr_auto] gap-1.5 bg-slate-900 border border-slate-800 rounded-lg p-1.5 shrink-0 items-center">
+            <div class="flex flex-col gap-0.5 min-w-0">
+                <span class="text-[9px] text-slate-500 leading-none">דורות מותרים (ניתן לבחור כמה)</span>
+                <div class="inline-flex rounded-md overflow-hidden border border-slate-700 text-[11px] bg-slate-950 w-full">
+                    <button onclick="setAllGens()" id="rat-AUTO" class="rat-btn flex-1 py-1 font-bold bg-cyan-600 text-white">הכל</button>
+                    <button onclick="toggleGen('5G')" id="rat-5G" class="rat-btn flex-1 py-1 font-medium text-slate-300 border-r border-slate-800">5G</button>
+                    <button onclick="toggleGen('4G')" id="rat-4G" class="rat-btn flex-1 py-1 font-medium text-slate-300 border-r border-slate-800">4G</button>
+                    <button onclick="toggleGen('3G')" id="rat-3G" class="rat-btn flex-1 py-1 font-medium text-slate-300 border-r border-slate-800">3G</button>
+                    <button onclick="toggleGen('2G')" id="rat-2G" class="rat-btn flex-1 py-1 font-medium text-slate-300 border-r border-slate-800">2G</button>
+                </div>
             </div>
-            <button onclick="toggleAirplaneMode()" id="btn-airplane" class="px-2.5 py-1 rounded text-[11px] font-bold bg-slate-800 text-amber-300 border border-slate-700">
-                ✈️ <span id="airplane-text">טיסה: כבוי</span>
-            </button>
+            <div class="flex items-stretch gap-1">
+                <button onclick="toggleAirplaneMode()" id="btn-airplane" class="px-2 rounded-md text-[11px] font-bold bg-slate-800 text-amber-300 border border-slate-700 flex flex-col items-center justify-center leading-tight">
+                    <span>✈️</span><span id="airplane-text" class="text-[9px]">טיסה: כבוי</span>
+                </button>
+                <button onclick="toggleHoBeep()" id="btn-ho-beep" class="px-2 rounded-md text-[11px] font-bold bg-slate-800 text-slate-300 border border-slate-700 flex flex-col items-center justify-center leading-tight" title="צפצוף במעבר תא (Handover)">
+                    <span>🔔</span><span id="ho-beep-text" class="text-[9px]">HO: כבוי</span>
+                </button>
+            </div>
         </div>
 
         <!-- Row 2: Serving Cell Compact Identity Grid -->
@@ -121,8 +121,8 @@
                     <div id="cell-tac" class="font-bold text-slate-200 mono text-xs">---</div>
                 </div>
                 <div class="bg-slate-950 px-1.5 py-1 rounded border border-slate-800/80">
-                    <div class="text-slate-500">BW / Freq</div>
-                    <div id="cell-bw" class="font-bold text-slate-200 mono text-xs">---</div>
+                    <div class="text-slate-500">Tx הטלפון (dBm)</div>
+                    <div id="cell-tx" class="font-bold text-orange-300 mono text-xs">--</div>
                 </div>
                 <div class="bg-slate-950 px-1.5 py-1 rounded border border-slate-800/80">
                     <div class="text-slate-500">TA (מרחק)</div>
@@ -251,6 +251,7 @@
             </select>
             <span id="rt-map-info" class="text-slate-400 font-mono truncate"></span>
         </div>
+        <div id="rt-map-link" class="text-[11px] text-slate-300 bg-slate-900 border border-slate-800 rounded px-2 py-1 shrink-0">🔗 תחנה משוערת: ממתין לנתוני תא ולמיקום…</div>
         <div id="rt-map" class="flex-1 min-h-[240px] rounded-lg border border-slate-800 overflow-hidden" style="direction:ltr"></div>
         <div id="rt-map-legend" class="text-[10px] text-slate-500 shrink-0 flex flex-wrap gap-x-3"></div>
     </section>
@@ -416,22 +417,21 @@
     <div id="shizuku-guide-modal" class="hidden fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4">
         <div class="bg-slate-900 border border-cyan-500/40 rounded-xl max-w-md w-full p-4 shadow-2xl">
             <div class="flex items-center justify-between mb-2">
-                <h3 class="text-sm font-bold text-white">⚡ הפעלת Shizuku לשליטה ישירה במודם</h3>
+                <h3 class="text-sm font-bold text-white">⚡ חיבור Shizuku לשליטה במודם</h3>
                 <button onclick="closeShizukuModal()" class="text-slate-400 hover:text-white text-base">✕</button>
             </div>
-            <p class="text-xs text-slate-300 mb-2">
-                שירות <strong>Shizuku</strong> כבוי כרגע (נדרשת הפעלה מחדש לאחר כיבוי המכשיר):
-            </p>
-            <ol class="list-decimal list-inside text-xs text-slate-200 space-y-1.5 bg-slate-950 border border-slate-800 rounded-lg p-2.5 mb-3">
-                <li>ודא חיבור לרשת <strong>Wi-Fi</strong> פעילה.</li>
-                <li>פתח <strong>Developer Options</strong> והפעל <strong>Wireless debugging</strong>.</li>
-                <li>פתח את אפליקציית <strong>Shizuku</strong> ולחץ על <strong>Start</strong>.</li>
-            </ol>
+            <p class="text-[11px] text-slate-400 mb-1.5">נדרש לשינוי דורות ולמצב טיסה. הצפייה בנתונים עובדת גם בלעדיו.</p>
+            <ol id="shizuku-steps" class="list-decimal list-inside text-xs text-slate-200 space-y-1.5 bg-slate-950 border border-slate-800 rounded-lg p-2.5 mb-3"></ol>
             <div class="flex flex-col gap-1.5">
-                <button onclick="openDevOptionsNative()" class="w-full py-2 px-3 bg-cyan-600 text-white rounded-lg text-xs font-bold">⚙️ פתח Developer Options</button>
-                <button onclick="openShizukuAppNative()" class="w-full py-2 px-3 bg-indigo-600 text-white rounded-lg text-xs font-bold">🚀 פתח אפליקציית Shizuku</button>
-                <button type="button" id="rt-unified-help-btn" onclick="rtUnifiedOpenHelp()"  class="w-full py-2 px-3 bg-emerald-600/20 text-emerald-300 border border-emerald-500/40 rounded-lg text-xs font-bold">❓ פתח מדריך התקנה מלא (כולל צילומי מסך)</button>
-                <button onclick="closeShizukuModal()" class="w-full py-1.5 px-3 bg-slate-800 text-slate-300 rounded-lg text-xs">סגור (צפייה בנתונים בלבד)</button>
+                <button id="shizuku-main-btn" onclick="shizukuConnectNative()" class="w-full py-2 px-3 bg-cyan-600 text-white rounded-lg text-xs font-bold">התחבר</button>
+                <div class="grid grid-cols-2 gap-1.5">
+                    <button onclick="shizukuSelfTestNative()" class="py-1.5 px-2 bg-slate-800 text-slate-200 border border-slate-700 rounded-lg text-xs">🔍 בדוק חיבור</button>
+                    <button onclick="openDevOptionsNative()" class="py-1.5 px-2 bg-slate-800 text-slate-200 border border-slate-700 rounded-lg text-xs">⚙️ Developer Options</button>
+                </div>
+                <div id="shizuku-test-out" class="text-[11px] text-slate-400 font-mono break-all min-h-[1rem]"></div>
+                <button type="button" id="rt-unified-help-btn" onclick="openHelpCenter()" class="w-full py-1.5 px-3 bg-emerald-600/20 text-emerald-300 border border-emerald-500/40 rounded-lg text-xs font-bold">❓ מדריך התקנה מלא</button>
+                <button onclick="probeTxNative()" class="w-full py-1.5 px-3 bg-slate-800 text-slate-300 border border-slate-700 rounded-lg text-[11px]">📶 חפש עוצמת שידור (Tx) של הטלפון</button>
+                <button onclick="closeShizukuModal()" class="w-full py-1.5 px-3 bg-slate-800 text-slate-300 rounded-lg text-xs">סגור</button>
             </div>
         </div>
     </div>
@@ -466,7 +466,7 @@
                 tech: '---', band: '---', plmn: 'ממתין להרשאות/מודם',
                 pci: '---', gnb: '---', arfcn: '---', tac: '---', bw: '---', ta: 0
             },
-            rf: { rsrp: null, rsrq: null, sinr: null, rssi: null },
+            rf: { rsrp: null, rsrq: null, sinr: null, rssi: null, txPower: null },
             neighbors: [],
             history: [],
             liveSamples: [],
@@ -531,33 +531,67 @@
         }
 
         let _rtShizukuInitialPromptHandled = false;
-        window.onShizukuStatus = function(isRunning) {
+        const SHIZUKU_INFO = {
+            NOT_INSTALLED: { label: 'Shizuku: לא מותקן', color: 'rose', btn: '⬇️ התקן Shizuku',
+                steps: ['התקן את אפליקציית <strong>Shizuku</strong> (Google Play / GitHub).', 'פתח אותה והפעל אותה (שלב 2 במדריך), ואז חזור לכאן.'] },
+            NOT_RUNNING: { label: 'Shizuku: כבוי', color: 'amber', btn: '🚀 פתח Shizuku והפעל',
+                steps: ['ודא חיבור <strong>Wi-Fi</strong>.', 'ב-Developer Options הפעל <strong>Wireless debugging</strong>.', 'פתח את <strong>Shizuku</strong> ולחץ <strong>Start</strong>. נדרש מחדש אחרי כל אתחול מכשיר.', 'חזור לאפליקציה — החיבור יזוהה אוטומטית תוך שניות.'] },
+            NO_PERMISSION: { label: 'Shizuku: ממתין לאישור', color: 'amber', btn: '🔑 בקש הרשאה',
+                steps: ['Shizuku פועל. לחץ על הכפתור ואשר את הבקשה "Allow".'] },
+            DENIED: { label: 'Shizuku: נדחה', color: 'rose', btn: '⚙️ אשר ב-Shizuku',
+                steps: ['ההרשאה נדחתה בעבר ולכן החלון לא יופיע שוב.', 'ב-Shizuku פתח <strong>אפליקציות מורשות</strong> ואפשר ל-RT-MON.'] },
+            READY: { label: 'Shizuku: מחובר', color: 'emerald', btn: '✔️ מחובר',
+                steps: ['החיבור תקין. ניתן לשנות דורות ומצב טיסה.'] }
+        };
+        state.shizukuState = 'UNKNOWN';
+        window.onShizukuState = function (st) {
+            const info = SHIZUKU_INFO[st] || { label: 'Shizuku', color: 'amber', btn: 'בדוק חיבור', steps: [] };
+            const prev = state.shizukuState;
+            state.shizukuState = st;
+            const c = info.color;
             const btn = document.getElementById('btn-shizuku-status');
-            if (isRunning) {
-                btn.className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40';
-                btn.textContent = '⚡ Shizuku פעיל';
+            btn.className = `h-7 px-2 rounded-full text-[10px] font-bold inline-flex items-center gap-1 bg-${c}-500/15 text-${c}-300 border border-${c}-500/40`;
+            document.getElementById('shizuku-dot').className = `w-1.5 h-1.5 rounded-full bg-${c}-400`;
+            document.getElementById('shizuku-label').textContent = info.label;
+            const steps = document.getElementById('shizuku-steps');
+            if (steps) steps.innerHTML = info.steps.map(x => `<li>${x}</li>`).join('');
+            const main = document.getElementById('shizuku-main-btn');
+            if (main) { main.textContent = info.btn; main.disabled = st === 'READY'; main.className = 'w-full py-2 px-3 rounded-lg text-xs font-bold text-white ' + (st === 'READY' ? 'bg-emerald-700/60' : 'bg-cyan-600'); }
+            if (st === 'READY') {
                 closeShizukuModal();
                 _rtShizukuInitialPromptHandled = true;
-            } else {
-                btn.className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40';
-                btn.textContent = '⚡ הפעל Shizuku';
-                if (!_rtShizukuInitialPromptHandled) {
-                    _rtShizukuInitialPromptHandled = true;
-                    openShizukuModal();
-                    addLog('SYS', 'SHIZUKU', 'חלון הנחיות Shizuku הוצג בפתיחת האפליקציה');
-                }
+                if (prev !== 'READY' && prev !== 'UNKNOWN') showToast('Shizuku', 'החיבור נוצר בהצלחה');
+            } else if (!_rtShizukuInitialPromptHandled) {
+                _rtShizukuInitialPromptHandled = true;
+                openShizukuModal();
+                addLog('SYS', 'SHIZUKU', 'מצב Shizuku: ' + st);
             }
         };
+        window.onShizukuStatus = function (isRunning) { if (!isRunning && state.shizukuState === 'UNKNOWN') window.onShizukuState('NOT_RUNNING'); };
+        function shizukuConnectNative() { if (window.AndroidModem && window.AndroidModem.shizukuConnect) window.AndroidModem.shizukuConnect(); }
+        function shizukuSelfTestNative() {
+            const out = document.getElementById('shizuku-test-out');
+            if (out) out.textContent = 'בודק...';
+            if (window.AndroidModem && window.AndroidModem.shizukuSelfTest) window.AndroidModem.shizukuSelfTest();
+            else if (out) out.textContent = 'לא זמין מחוץ לאפליקציה';
+        }
+        window.onShizukuTest = function (r) { const out = document.getElementById('shizuku-test-out'); if (out) out.textContent = r; addLog('SYS', 'SHIZUKU', 'בדיקת חיבור: ' + r); };
+        function probeTxNative() {
+            if (window.AndroidModem && window.AndroidModem.probeTxPower) window.AndroidModem.probeTxPower();
+            else showToast('Tx power', 'לא זמין מחוץ לאפליקציה', 'warn');
+        }
+        window.onTxProbe = function (r) { addLog('SYS', 'TXPROBE', 'חיפוש עוצמת שידור (Tx)', r); showToast('Tx power', String(r).slice(0, 120)); };
 
         const ALL_GENS = ['2G', '3G', '4G', '5G'];
         state.allowedGens = ALL_GENS.slice();
 
         function renderGenButtons() {
             const allOn = state.allowedGens.length === ALL_GENS.length;
-            document.getElementById('rat-AUTO').className = 'rat-btn px-2 py-1 rounded font-bold ' + (allOn ? 'bg-cyan-600 text-white' : 'text-slate-300');
+            const base = 'rat-btn flex-1 py-1 ';
+            document.getElementById('rat-AUTO').className = base + 'font-bold ' + (allOn ? 'bg-cyan-600 text-white' : 'text-slate-300');
             ALL_GENS.forEach(g => {
                 const on = !allOn && state.allowedGens.includes(g);
-                document.getElementById('rat-' + g).className = 'rat-btn px-2 py-1 rounded ' + (on ? 'font-bold bg-cyan-600 text-white' : 'font-medium text-slate-300');
+                document.getElementById('rat-' + g).className = base + 'border-r border-slate-800 ' + (on ? 'font-bold bg-cyan-600 text-white' : 'font-medium text-slate-300');
             });
         }
 
@@ -594,14 +628,41 @@
         function renderAirplane() {
             const btn = document.getElementById('btn-airplane');
             const txt = document.getElementById('airplane-text');
-            if (state.airplaneMode) {
-                btn.className = 'px-2.5 py-1 rounded text-[11px] font-bold bg-amber-500 text-slate-950';
-                txt.textContent = 'טיסה: פעיל';
-            } else {
-                btn.className = 'px-2.5 py-1 rounded text-[11px] font-bold bg-slate-800 text-amber-300 border border-slate-700';
-                txt.textContent = 'טיסה: כבוי';
-            }
+            const base = 'px-2 rounded-md text-[11px] font-bold flex flex-col items-center justify-center leading-tight ';
+            btn.className = base + (state.airplaneMode ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-amber-300 border border-slate-700');
+            txt.textContent = state.airplaneMode ? 'טיסה: פעיל' : 'טיסה: כבוי';
         }
+
+        // ---- Handover beep ----
+        state.hoBeep = false;
+        try { state.hoBeep = localStorage.getItem('rt_ho_beep') === '1'; } catch (_e) {}
+        function renderHoBeep() {
+            const btn = document.getElementById('btn-ho-beep');
+            if (!btn) return;
+            btn.className = 'px-2 rounded-md text-[11px] font-bold flex flex-col items-center justify-center leading-tight ' +
+                (state.hoBeep ? 'bg-emerald-600 text-white border border-emerald-400' : 'bg-slate-800 text-slate-300 border border-slate-700');
+            document.getElementById('ho-beep-text').textContent = state.hoBeep ? 'HO: דולק' : 'HO: כבוי';
+        }
+        function rtBeep(count) {
+            try {
+                if (window.AndroidModem && window.AndroidModem.beep) { window.AndroidModem.beep(count || 2); return; }
+                const ac = new (window.AudioContext || window.webkitAudioContext)();
+                for (let i = 0; i < (count || 2); i++) {
+                    const o = ac.createOscillator(), g = ac.createGain();
+                    o.frequency.value = 1000; o.connect(g); g.connect(ac.destination);
+                    g.gain.value = 0.2; o.start(ac.currentTime + i * 0.26); o.stop(ac.currentTime + i * 0.26 + 0.18);
+                }
+            } catch (_e) {}
+        }
+        function toggleHoBeep() {
+            state.hoBeep = !state.hoBeep;
+            try { localStorage.setItem('rt_ho_beep', state.hoBeep ? '1' : '0'); } catch (_e) {}
+            renderHoBeep();
+            if (state.hoBeep) rtBeep(1); // confirmation / test beep
+            showToast('צפצוף Handover', state.hoBeep ? 'יושמע צפצוף בכל מעבר תא' : 'כבוי');
+        }
+        document.addEventListener('DOMContentLoaded', renderHoBeep);
+
         // Called by the native side with the real system airplane-mode state
         window.onAirplaneState = function (on) { state.airplaneMode = !!on; renderAirplane(); };
 
@@ -709,6 +770,7 @@
                         const hoMsg = `PCI ${sc.previousPci ?? '--'} -> PCI ${sc.pci ?? '--'} (${sc.tech || state.activeRat} ${sc.band || ''})`;
                         try { addLog('HO', 'HW', `[HO #${state.hoCount}] Cell Handover`, hoMsg); } catch (_e) {}
                         try { showToast('מעבר תחנת בסיס (Handover)', hoMsg, 'ho'); } catch (_e) {}
+                        if (state.hoBeep) rtBeep(2);
                     }
 
                     const rawBand = sc.band || data.band;
@@ -765,6 +827,7 @@
                     state.rf.rsrq = inRange(rsrqN, -50, 5);
                     state.rf.sinr = inRange(sinrN, -40, 60);
                     state.rf.rssi = inRange(rssiN, -150, 0);
+                    state.rf.txPower = inRange(toNum(sc.txPower ?? data.txPower), -60, 40);
                 }
 
                 if (Array.isArray(data.neighbors)) {
@@ -792,12 +855,14 @@
                     band: state.servingCell.band,
                     plmn: state.servingCell.plmn,
                     cell_id: state.servingCell.pci,
+                    gnb: state.servingCell.gnb,
                     arfcn: state.servingCell.arfcn,
                     tac: state.servingCell.tac,
                     rsrp: state.rf.rsrp,
                     rsrq: state.rf.rsrq,
                     sinr: state.rf.sinr,
-                    rssi: state.rf.rssi
+                    rssi: state.rf.rssi,
+                    tx_power: state.rf.txPower
                 });
                 if (state.liveSamples.length > 500) state.liveSamples.shift();
 
@@ -811,6 +876,7 @@
                         `RSRP: ${f1(state.rf.rsrp, 'dBm')} | RSRQ: ${f1(state.rf.rsrq, 'dB')} | SINR: ${f1(state.rf.sinr, 'dB')} | RSSI: ${f1(state.rf.rssi, 'dBm')}`);
                 }
 
+                if (typeof window.rtMapLinkUpdate === 'function') { try { window.rtMapLinkUpdate(); } catch (_e) {} }
                 if (typeof updateLiveUI === 'function') updateLiveUI();
                 if (typeof drawLiveChartOnce === 'function') drawLiveChartOnce();
             } catch (err) {
@@ -829,8 +895,8 @@
             document.getElementById('cell-gnb').textContent = state.servingCell.gnb;
             document.getElementById('cell-arfcn').textContent = state.servingCell.arfcn;
             document.getElementById('cell-tac').textContent = state.servingCell.tac;
-            document.getElementById('cell-bw').textContent = state.servingCell.band;
-            document.getElementById('cell-ta').textContent = state.servingCell.ta > 0 ? `${state.servingCell.ta} (~${state.servingCell.ta * 15}m)` : '0';
+            document.getElementById('cell-tx').textContent = (typeof state.rf.txPower === 'number') ? state.rf.txPower.toFixed(0) : '--';
+            document.getElementById('cell-ta').textContent = state.servingCell.ta > 0 ? `${state.servingCell.ta} (~${Math.round(state.servingCell.ta * 78.12)}m)` : '0';
             const imsiCellEl = document.getElementById('rt-inline-imsi');
             if (imsiCellEl) imsiCellEl.textContent = state.imsi || '---';
 
@@ -967,7 +1033,7 @@
             let mime = '';
             let filename = '';
             if (format === 'csv') {
-                const headers = ['timestamp', 'rat', 'tech', 'band', 'plmn', 'cell_id', 'gnb', 'arfcn', 'tac', 'rsrp', 'rsrq', 'sinr', 'rssi'];
+                const headers = ['timestamp', 'rat', 'tech', 'band', 'plmn', 'cell_id', 'gnb', 'arfcn', 'tac', 'rsrp', 'rsrq', 'sinr', 'rssi', 'tx_power'];
                 const rows = samples.map(s => headers.map(h => s[h] ?? '').join(','));
                 content = [headers.join(','), ...rows].join('\n');
                 mime = 'text/csv;charset=utf-8;';

@@ -176,6 +176,111 @@
     } catch (e) {}
   }
 
+  /* ------------------------------------------------------------------
+     Linking the serving cell to antenna sites.
+     The gov.il dataset has no PCI / Cell-ID, so the link is an estimate:
+       1. operator (PLMN) and generation filter the candidate sites;
+       2. while driving/walking, RSRP-weighted observations per eNB/gNB
+          converge on the tower position;
+       3. LTE timing advance gives a distance ring around the phone.
+     ------------------------------------------------------------------ */
+  var PLMN_COMPANY = { "425-01": "PHI", "425-02": "סלקום", "425-03": "פלאפון", "425-07": "PHI", "425-08": "סלקום", "425-19": "PHI" };
+  var linkLayer = null, obs = {}, lastLink = 0, lastKey = "";
+  try { obs = JSON.parse(localStorage.getItem("rt_cell_obs") || "{}") || {}; } catch (e) { obs = {}; }
+
+  function haversine(lat1, lon1, lat2, lon2) {
+    var R = 6371000, r = Math.PI / 180;
+    var a = Math.sin((lat2 - lat1) * r / 2) ** 2 + Math.cos(lat1 * r) * Math.cos(lat2 * r) * Math.sin((lon2 - lon1) * r / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(a));
+  }
+  function genOf(tech) {
+    tech = String(tech || "");
+    return tech.indexOf("5G") >= 0 ? "5" : tech.indexOf("4G") >= 0 ? "4" : tech.indexOf("3G") >= 0 ? "3" : tech.indexOf("2G") >= 0 ? "2" : "";
+  }
+  function companyIdxFor(plmn) {
+    var d = data(), m = /(\d{3})-(\d{2,3})/.exec(String(plmn || ""));
+    if (!d || !m) return -1;
+    var name = PLMN_COMPANY[m[1] + "-" + m[2]];
+    return name ? d.companies.findIndex(function (c) { return c.indexOf(name) === 0; }) : -1;
+  }
+  function confidenceText(o, dist) {
+    if (o && o.n >= 15 && dist < 150) return "גבוהה";
+    if (o && o.n >= 5 && dist < 400) return "בינונית";
+    return "נמוכה";
+  }
+
+  window.rtMapLinkUpdate = function () {
+    var now = Date.now();
+    if (now - lastLink < 1500) return;
+    lastLink = now;
+    var st = window.state, d = data();
+    if (!st || !d || !loc) return;
+    var sc = st.servingCell || {}, rf = st.rf || {};
+    var valid = function (v) { return v !== undefined && v !== null && v !== "---"; };
+    var key = (sc.tech || "?") + "|" + (valid(sc.gnb) ? "e" + sc.gnb : "p" + sc.pci + "@" + sc.arfcn);
+    if (!valid(sc.pci) && !valid(sc.gnb)) return;
+
+    // 1) accumulate RSRP-weighted observation (stronger samples count far more)
+    var o = obs[key];
+    if (typeof rf.rsrp === "number") {
+      var w = Math.pow(10, (rf.rsrp + 130) / 10);
+      if (!o) o = obs[key] = { n: 0, w: 0, la: 0, lo: 0, best: -999 };
+      o.n++; o.w += w; o.la += w * loc.lat; o.lo += w * loc.lon;
+      if (rf.rsrp > o.best) o.best = rf.rsrp;
+      if (o.n % 10 === 0) {
+        try {
+          var keys = Object.keys(obs);
+          if (keys.length > 300) delete obs[keys[0]];
+          localStorage.setItem("rt_cell_obs", JSON.stringify(obs));
+        } catch (e) {}
+      }
+    }
+    var est = o && o.n >= 3 ? { lat: o.la / o.w, lon: o.lo / o.w } : null;
+
+    // 2) candidate sites: same operator + generation near the reference point
+    var ci = companyIdxFor(sc.plmn), g = genOf(sc.tech);
+    var ref = est || loc;
+    var ta = (typeof sc.ta === "number" && sc.ta > 0 && String(sc.tech).indexOf("4G") >= 0) ? sc.ta * 78.12 : 0;
+    function pick(useGen) {
+      var out = [];
+      for (var i = 0; i < d.rows.length; i++) {
+        var r = d.rows[i];
+        if (ci >= 0 && r[2] !== ci) continue;
+        if (useGen && g && String(r[7]).indexOf(g) < 0) continue;
+        if (Math.abs(r[0] - ref.lat) > 0.02 || Math.abs(r[1] - ref.lon) > 0.025) continue;
+        var dist = haversine(ref.lat, ref.lon, r[0], r[1]);
+        var du = haversine(loc.lat, loc.lon, r[0], r[1]);
+        out.push({ r: r, dist: dist, du: du, score: (!est && ta) ? Math.abs(du - ta) : dist });
+      }
+      return out.sort(function (a, b) { return a.score - b.score; }).slice(0, 3);
+    }
+    var cands = pick(true);
+    if (!cands.length) cands = pick(false);
+
+    // 3) draw + describe
+    var el = $("rt-map-link");
+    if (!cands.length) { if (el) el.textContent = "🔗 לא נמצאה תחנה תואמת בסביבה (המאגר כולל רק אנטנות בישראל)"; if (linkLayer) linkLayer.clearLayers(); return; }
+    var top = cands[0], row = top.r;
+    var conf = confidenceText(o, top.dist);
+    var cname = d.companies[row[2]];
+    if (el) el.innerHTML = "🔗 תחנה משוערת (<b>ביטחון " + conf + "</b>): " + esc(cname) + " · " + esc([row[4], row[5]].filter(Boolean).join(", ")) +
+      " · " + Math.round(top.du) + " מ׳ ממני" + (est ? "" : " · מבוסס קרבה" + (ta ? " + TA≈" + Math.round(ta) + " מ׳" : "")) +
+      " · תא " + esc(sc.tech) + " " + (valid(sc.gnb) ? "eNB " + esc(sc.gnb) : "PCI " + esc(sc.pci)) + " (" + (o ? o.n : 0) + " דגימות)";
+    if (!map) return;
+    if (!linkLayer) linkLayer = L.layerGroup().addTo(map);
+    if (key !== lastKey || true) linkLayer.clearLayers();
+    lastKey = key;
+    if (ta) L.circle([loc.lat, loc.lon], { radius: ta, color: "#f59e0b", weight: 1, dashArray: "4 4", fill: false }).addTo(linkLayer);
+    if (est) L.circleMarker([est.lat, est.lon], { radius: 4, color: "#f97316", weight: 2, fillColor: "#fff", fillOpacity: 1 })
+      .bindTooltip("מרכז משוקלל של הדגימות").addTo(linkLayer);
+    cands.forEach(function (c, i) {
+      var first = i === 0;
+      L.circleMarker([c.r[0], c.r[1]], { radius: first ? 13 : 9, color: first ? "#f97316" : "#facc15", weight: first ? 3 : 2, fill: false })
+        .bindPopup(popupHtml(c.r)).addTo(linkLayer);
+    });
+    L.polyline([[loc.lat, loc.lon], [row[0], row[1]]], { color: "#f97316", weight: 2, dashArray: "6 6" }).addTo(linkLayer);
+  };
+
   window.rtMap = {
     onShow: function () {
       build();

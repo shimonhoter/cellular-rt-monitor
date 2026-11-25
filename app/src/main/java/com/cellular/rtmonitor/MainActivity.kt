@@ -71,6 +71,8 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
 
         Shizuku.addRequestPermissionResultListener(shizukuPermissionListener)
+        Shizuku.addBinderReceivedListenerSticky(shizukuBinderReceived)
+        Shizuku.addBinderDeadListener(shizukuBinderDead)
         modemController = RealModemController(this)
 
         webView = WebView(this).apply {
@@ -129,6 +131,7 @@ class MainActivity : AppCompatActivity() {
 
         checkAndRequestPermissions()
         requestShizukuPermissionIfNeeded()
+        pollingHandler.postDelayed(shizukuWatchRunnable, 3000L)
         requestNotificationPermissionIfNeeded()
         startBackgroundMonitorServiceSafely()
     }
@@ -159,34 +162,107 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun isShizukuReady(): Boolean {
+    private val SHIZUKU_PKG = "moe.shizuku.privileged.api"
+    private var lastShizukuState = ""
+    private var autoRequestedPermission = false
+
+    private fun isShizukuInstalled(): Boolean = try {
+        packageManager.getPackageInfo(SHIZUKU_PKG, 0); true
+    } catch (_: Exception) { false }
+
+    /** NOT_INSTALLED | NOT_RUNNING | NO_PERMISSION | DENIED | READY */
+    private fun computeShizukuState(): String {
         return try {
-            Shizuku.pingBinder() && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
-        } catch (e: Exception) {
-            false
+            if (!Shizuku.pingBinder()) {
+                if (isShizukuInstalled()) "NOT_RUNNING" else "NOT_INSTALLED"
+            } else if (Shizuku.isPreV11()) {
+                "NOT_RUNNING"
+            } else if (Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
+                "READY"
+            } else if (Shizuku.shouldShowRequestPermissionRationale()) {
+                "DENIED"
+            } else {
+                "NO_PERMISSION"
+            }
+        } catch (_: Throwable) {
+            if (isShizukuInstalled()) "NOT_RUNNING" else "NOT_INSTALLED"
         }
     }
 
+    private fun isShizukuReady(): Boolean = computeShizukuState() == "READY"
+
+    /** Pushes the current Shizuku state to the UI; when the binder is up but permission missing, asks once. */
     private fun updateShizukuUiState() {
-        val ready = isShizukuReady()
+        val state = computeShizukuState()
+        if (state == "NO_PERMISSION" && !autoRequestedPermission) {
+            autoRequestedPermission = true
+            try { Shizuku.requestPermission(SHIZUKU_CODE) } catch (_: Throwable) {}
+        }
+        if (state == "READY") autoRequestedPermission = false
+        lastShizukuState = state
+        if (!::webView.isInitialized) return
+        val ready = state == "READY"
         webView.post {
             webView.evaluateJavascript(
-                "if (window.onShizukuStatus) { window.onShizukuStatus($ready); }",
+                "if (window.onShizukuState) { window.onShizukuState('$state'); } if (window.onShizukuStatus) { window.onShizukuStatus($ready); }",
                 null
             )
         }
     }
 
-    private fun requestShizukuPermissionIfNeeded() {
-        try {
-            if (Shizuku.pingBinder()) {
-                if (Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
-                    Shizuku.requestPermission(SHIZUKU_CODE)
-                }
-            }
-        } catch (e: Exception) {
-            // Shizuku not running
+    private val shizukuBinderReceived = Shizuku.OnBinderReceivedListener {
+        autoRequestedPermission = false
+        runOnUiThread { updateShizukuUiState() }
+    }
+    private val shizukuBinderDead = Shizuku.OnBinderDeadListener {
+        runOnUiThread { updateShizukuUiState() }
+    }
+
+    /** Re-checks every 3 s until Shizuku is READY, so starting Shizuku after the app is picked up automatically. */
+    private val shizukuWatchRunnable = object : Runnable {
+        override fun run() {
+            val prev = lastShizukuState
+            val now = computeShizukuState()
+            if (now != prev) updateShizukuUiState()
+            pollingHandler.postDelayed(this, if (now == "READY") 10000L else 3000L)
         }
+    }
+
+    private fun requestShizukuPermissionIfNeeded() {
+        updateShizukuUiState()
+    }
+
+    private fun openShizukuInstallPage() {
+        val targets = listOf(
+            "market://details?id=$SHIZUKU_PKG",
+            "https://play.google.com/store/apps/details?id=$SHIZUKU_PKG",
+            "https://github.com/RikkaApps/Shizuku/releases"
+        )
+        for (url in targets) {
+            try {
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                return
+            } catch (_: Exception) {}
+        }
+    }
+
+    private fun openShizukuManager() {
+        val launch = packageManager.getLaunchIntentForPackage(SHIZUKU_PKG)
+        if (launch != null) startActivity(launch) else openShizukuInstallPage()
+    }
+
+    private fun playBeep(count: Int) {
+        Thread {
+            try {
+                val tg = android.media.ToneGenerator(android.media.AudioManager.STREAM_MUSIC, 100)
+                repeat(count.coerceIn(1, 3)) {
+                    tg.startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 180)
+                    Thread.sleep(260)
+                }
+                Thread.sleep(150)
+                tg.release()
+            } catch (_: Exception) {}
+        }.start()
     }
 
     inner class WebAppInterface {
@@ -320,12 +396,53 @@ class MainActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun openShizukuApp() {
-            val launchIntent = packageManager.getLaunchIntentForPackage("moe.shizuku.privileged.api")
-            if (launchIntent != null) {
-                startActivity(launchIntent)
-            } else {
-                Toast.makeText(this@MainActivity, "אפליקציית Shizuku לא מותקנת במכשיר", Toast.LENGTH_SHORT).show()
+            runOnUiThread { openShizukuManager() }
+        }
+
+        @JavascriptInterface
+        fun getShizukuState(): String = computeShizukuState()
+
+        /** One button that does the right next step for the current Shizuku state. */
+        @JavascriptInterface
+        fun shizukuConnect() {
+            runOnUiThread {
+                when (computeShizukuState()) {
+                    "NOT_INSTALLED" -> openShizukuInstallPage()
+                    "NOT_RUNNING" -> openShizukuManager()
+                    "NO_PERMISSION" -> try { Shizuku.requestPermission(SHIZUKU_CODE) } catch (_: Throwable) {}
+                    "DENIED" -> {
+                        Toast.makeText(this@MainActivity, "ב-Shizuku: אפליקציות מורשות ← אפשר ל-RT-MON", Toast.LENGTH_LONG).show()
+                        openShizukuManager()
+                    }
+                    else -> {}
+                }
+                updateShizukuUiState()
             }
+        }
+
+        @JavascriptInterface
+        fun shizukuSelfTest() {
+            Thread {
+                val res = modemController.shizukuSelfTest()
+                runOnUiThread {
+                    webView.evaluateJavascript("window.onShizukuTest && window.onShizukuTest(${org.json.JSONObject.quote(res)})", null)
+                }
+            }.start()
+        }
+
+        @JavascriptInterface
+        fun probeTxPower() {
+            Thread {
+                val res = modemController.probeTxPower()
+                runOnUiThread {
+                    webView.evaluateJavascript("window.onTxProbe && window.onTxProbe(${org.json.JSONObject.quote(res)})", null)
+                }
+            }.start()
+        }
+
+        @JavascriptInterface
+        fun beep(count: Int) {
+            playBeep(count)
         }
 
         @JavascriptInterface
@@ -445,6 +562,8 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         Shizuku.removeRequestPermissionResultListener(shizukuPermissionListener)
+        Shizuku.removeBinderReceivedListener(shizukuBinderReceived)
+        Shizuku.removeBinderDeadListener(shizukuBinderDead)
         pollingHandler.removeCallbacksAndMessages(null)
         locationListener?.let { (getSystemService(LOCATION_SERVICE) as android.location.LocationManager).removeUpdates(it) }
     }

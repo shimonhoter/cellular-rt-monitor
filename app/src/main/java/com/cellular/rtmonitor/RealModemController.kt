@@ -28,7 +28,7 @@ class RealModemController(private val context: Context) {
         context.getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
 
     // [START: ShizukuHelpers]
-    private fun isShizukuAvailable(): Boolean {
+    fun isShizukuAvailable(): Boolean {
         return try {
             val binderOk = Shizuku.pingBinder()
             val perm = Shizuku.checkSelfPermission()
@@ -41,35 +41,49 @@ class RealModemController(private val context: Context) {
         }
     }
 
-    private fun runShizukuShellCommand(command: String): Boolean {
-        return try {
-            Log.i(TAG, "runShizukuShellCommand start: $command")
-            val method = Shizuku::class.java.getDeclaredMethod(
-                "newProcess",
-                Array<String>::class.java,
-                Array<String>::class.java,
-                String::class.java
-            )
-            method.isAccessible = true
-            val process = method.invoke(null, arrayOf("sh", "-c", command), null, null) as Process
-
-            val outText = BufferedReader(InputStreamReader(process.inputStream)).use { it.readText().trim() }
-            val errText = BufferedReader(InputStreamReader(process.errorStream)).use { it.readText().trim() }
-            val exitCode = process.waitFor()
-
-            if (outText.isNotEmpty()) {
-                Log.i(TAG, "sh stdout: $outText")
+    /** Runs a shell command with Shizuku (shell uid). Retries once on binder errors. Returns exit code + merged output. */
+    fun runShizukuShell(command: String): Pair<Int, String> {
+        var last: Exception? = null
+        for (attempt in 1..2) {
+            try {
+                Log.i(TAG, "runShizukuShell[$attempt]: $command")
+                val method = Shizuku::class.java.getDeclaredMethod(
+                    "newProcess",
+                    Array<String>::class.java,
+                    Array<String>::class.java,
+                    String::class.java
+                )
+                method.isAccessible = true
+                val process = method.invoke(null, arrayOf("sh", "-c", command), null, null) as Process
+                val outText = BufferedReader(InputStreamReader(process.inputStream)).use { it.readText().trim() }
+                val errText = BufferedReader(InputStreamReader(process.errorStream)).use { it.readText().trim() }
+                val exitCode = process.waitFor()
+                if (errText.isNotEmpty()) Log.w(TAG, "sh stderr: $errText")
+                Log.i(TAG, "sh exitCode=$exitCode for cmd: $command")
+                return exitCode to (if (errText.isEmpty()) outText else "$outText\n$errText").trim()
+            } catch (e: Exception) {
+                last = e
+                Log.e(TAG, "runShizukuShell exception: ${e.message}", e)
+                try { Thread.sleep(300) } catch (_: InterruptedException) {}
             }
-            if (errText.isNotEmpty()) {
-                Log.w(TAG, "sh stderr: $errText")
-            }
-            Log.i(TAG, "sh exitCode=$exitCode for cmd: $command")
-            exitCode == 0
-        } catch (e: Exception) {
-            Log.e(TAG, "runShizukuShellCommand exception for [$command]: ${e.message}", e)
-            e.printStackTrace()
-            false
         }
+        return -1 to "ERROR: ${last?.javaClass?.simpleName}: ${last?.message}"
+    }
+
+    private fun runShizukuShellCommand(command: String): Boolean = runShizukuShell(command).first == 0
+
+    /** Connection self-test: should print uid=2000(shell). */
+    fun shizukuSelfTest(): String {
+        if (!isShizukuAvailable()) return "Shizuku לא מוכן (לא פועל או חסרה הרשאה)"
+        val (code, out) = runShizukuShell("id")
+        return if (code == 0) "OK: $out" else "נכשל (קוד $code): $out"
+    }
+
+    /** Looks for any UE transmit-power value the platform exposes. Android has no public API for it. */
+    fun probeTxPower(): String {
+        if (!isShizukuAvailable()) return "Shizuku לא מוכן"
+        val (_, out) = runShizukuShell("dumpsys telephony.registry 2>/dev/null | grep -i -E 'txpower|tx_power|transmit' | head -n 8")
+        return if (out.isBlank()) "לא נמצא שדה Tx power ב-telephony.registry (המכשיר לא חושף אותו)" else out
     }
     // [END: ShizukuHelpers]
 
