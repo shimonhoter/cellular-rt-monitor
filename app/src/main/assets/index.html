@@ -608,85 +608,129 @@
         }
 
         window.onRealModemData = function(data) {
-            const badge = document.getElementById('status-badge');
-            const dot = document.getElementById('status-dot');
-            const txt = document.getElementById('status-text');
-            badge.className = 'inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30';
-            dot.className = 'w-1.5 h-1.5 rounded-full bg-emerald-400 live-dot';
-            txt.textContent = 'REAL MODEM';
+            try {
+                if (typeof data === 'string') {
+                    try { data = JSON.parse(data); } catch (_e) { return; }
+                }
+                if (!data || typeof data !== 'object') return;
 
-            if (data.servingCell) {
-                const sc = data.servingCell;
-                if (sc.handoverOccurred) {
-                    state.hoCount++;
-                    const hoMsg = `PCI ${sc.previousPci} -> PCI ${sc.pci} (${sc.tech} ${sc.band})`;
-                    addLog('HO', 'HW', `[HO #${state.hoCount}] Cell Handover`, hoMsg);
-                    showToast('מעבר תחנת בסיס (Handover)', hoMsg, 'ho');
+                const toNum = (v) => {
+                    if (v === null || v === undefined || v === '' || v === '---') return null;
+                    const n = Number(v);
+                    return Number.isFinite(n) ? n : null;
+                };
+
+                const badge = document.getElementById('status-badge');
+                const dot = document.getElementById('status-dot');
+                const statusTxt = document.getElementById('status-text');
+                if (badge) badge.className = 'inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30';
+                if (dot) dot.className = 'w-1.5 h-1.5 rounded-full bg-emerald-400 live-dot';
+                if (statusTxt) statusTxt.textContent = 'REAL MODEM';
+
+                const sc = (data.servingCell && typeof data.servingCell === 'object') ? data.servingCell : data;
+                if (sc && typeof sc === 'object') {
+                    if (sc.handoverOccurred) {
+                        state.hoCount = (state.hoCount || 0) + 1;
+                        const hoMsg = `PCI ${sc.previousPci ?? '--'} -> PCI ${sc.pci ?? '--'} (${sc.tech || state.activeRat} ${sc.band || ''})`;
+                        try { addLog('HO', 'HW', `[HO #${state.hoCount}] Cell Handover`, hoMsg); } catch (_e) {}
+                        try { showToast('מעבר תחנת בסיס (Handover)', hoMsg, 'ho'); } catch (_e) {}
+                    }
+
+                    const rawBand = sc.band || data.band;
+                    if (rawBand && String(rawBand).trim() !== '---') {
+                        let enriched = String(rawBand).trim();
+                        try {
+                            if (typeof formatBandWithRange === 'function') {
+                                const fb = formatBandWithRange(enriched);
+                                if (fb && fb !== '---') enriched = fb;
+                            }
+                        } catch (_e) {}
+                        if (state.servingCell.band !== '---' && enriched !== state.servingCell.band) {
+                            try { addLog('RF', 'BAND', `${sc.tech || state.activeRat} Band: ${enriched}`, 'Active band & frequency range'); } catch (_e) {}
+                        }
+                        state.servingCell.band = enriched;
+                    }
+
+                    const imsiVal = data.imsi || sc.imsi;
+                    if (imsiVal && String(imsiVal) !== 'Unavailable' && !String(imsiVal).startsWith('Missing') && imsiVal !== state.imsi) {
+                        state.imsi = String(imsiVal);
+                        try { addLog('SYS', 'IMSI', `IMSI: ${state.imsi}`, `Subscriber ID: ${state.imsi}`); } catch (_e) {}
+                    }
+
+                    const plmnVal = data.plmn || sc.plmn;
+                    if (plmnVal && String(plmnVal).trim() !== '') {
+                        state.servingCell.plmn = String(plmnVal);
+                    }
+                    if (sc.rat) state.activeRat = String(sc.rat);
+                    if (sc.tech) state.servingCell.tech = String(sc.tech);
+                    else if (sc.rat) state.servingCell.tech = String(sc.rat);
+
+                    const pciN = toNum(sc.pci ?? sc.physicalCellId);
+                    if (pciN !== null && pciN >= 0 && pciN < 2147483647) state.servingCell.pci = pciN;
+
+                    const gnbN = toNum(sc.gnb ?? sc.enodebId ?? sc.cellId);
+                    if (gnbN !== null && gnbN >= 0 && gnbN < 2147483647) state.servingCell.gnb = gnbN;
+
+                    const arfcnN = toNum(sc.arfcn ?? sc.earfcn ?? sc.nrarfcn ?? sc.uarfcn);
+                    if (arfcnN !== null && arfcnN >= 0 && arfcnN < 2147483647) state.servingCell.arfcn = arfcnN;
+
+                    const tacN = toNum(sc.tac ?? sc.lac);
+                    if (tacN !== null && tacN >= 0 && tacN < 2147483647) state.servingCell.tac = tacN;
+
+                    const taN = toNum(sc.ta ?? sc.timingAdvance);
+                    if (taN !== null && taN >= 0 && taN < 2147483647) state.servingCell.ta = taN;
+
+                    const rsrpN = toNum(sc.rsrp ?? sc.dbm ?? sc.ssRsrp ?? data.rsrp);
+                    const rsrqN = toNum(sc.rsrq ?? sc.ssRsrq ?? data.rsrq);
+                    const sinrN = toNum(sc.sinr ?? sc.rssnr ?? sc.ssSinr ?? data.sinr);
+                    const rssiN = toNum(sc.rssi ?? data.rssi);
+
+                    if (rsrpN !== null && rsrpN < 0 && rsrpN > -160) state.rf.rsrp = rsrpN;
+                    if (rsrqN !== null && rsrqN <= 5 && rsrqN > -50) state.rf.rsrq = rsrqN;
+                    if (sinrN !== null && sinrN > -40 && sinrN < 60) state.rf.sinr = sinrN;
+                    if (rssiN !== null && rssiN < 0 && rssiN > -150) state.rf.rssi = rssiN;
+                    else if (typeof state.rf.rsrp === 'number' && state.rf.rssi === null) state.rf.rssi = state.rf.rsrp + 22;
                 }
 
-                const enrichedBand = formatBandWithRange(sc.band);
-                if (enrichedBand && enrichedBand !== '---') {
-                    sc.band = enrichedBand;
+                if (Array.isArray(data.neighbors)) {
+                    state.neighbors = data.neighbors;
                 }
-                if (data.imsi && data.imsi !== state.imsi) {
-                    state.imsi = data.imsi;
-                    addLog('SYS', 'IMSI', `IMSI: ${state.imsi}`, `Subscriber ID: ${state.imsi}`);
-                }
-                state.activeRat = sc.rat || '4G';
-                state.servingCell.plmn = sc.plmn || state.servingCell.plmn;
-                state.servingCell.tech = sc.tech || state.servingCell.tech;
-                if (sc.band && sc.band !== state.servingCell.band) {
-                    addLog('RF', 'BAND', `${sc.tech || state.activeRat} Band: ${sc.band}`, `Active band & frequency range`);
-                }
-                state.servingCell.band = sc.band || state.servingCell.band;
-                if (sc.pci !== undefined && sc.pci >= 0) state.servingCell.pci = sc.pci;
-                if (sc.gnb !== undefined && sc.gnb >= 0) state.servingCell.gnb = sc.gnb;
-                if (sc.arfcn !== undefined && sc.arfcn >= 0) state.servingCell.arfcn = sc.arfcn;
-                if (sc.tac !== undefined && sc.tac >= 0) state.servingCell.tac = sc.tac;
-                if (sc.ta !== undefined) state.servingCell.ta = sc.ta;
 
-                if (sc.rsrp !== undefined && sc.rsrp < 0 && sc.rsrp > -155) state.rf.rsrp = sc.rsrp;
-                if (sc.rsrq !== undefined && sc.rsrq <= 0 && sc.rsrq > -45) state.rf.rsrq = sc.rsrq;
-                if (sc.sinr !== undefined && sc.sinr > -35 && sc.sinr < 55) state.rf.sinr = sc.sinr;
-                if (sc.rssi !== undefined && sc.rssi < 0 && sc.rssi > -145) state.rf.rssi = sc.rssi;
-            }
+                state.sampleCount = (state.sampleCount || 0) + 1;
 
-            if (Array.isArray(data.neighbors)) {
-                state.neighbors = data.neighbors;
-            }
-
-            state.sampleCount++;
-            const sampleObj = {
-                timestamp: new Date().toISOString(),
-                rat: state.activeRat,
-                tech: state.servingCell.tech,
-                band: state.servingCell.band,
-                plmn: state.servingCell.plmn,
-                cell_id: state.servingCell.pci,
-                gnb: state.servingCell.gnb,
-                arfcn: state.servingCell.arfcn,
-                tac: state.servingCell.tac,
-                rsrp: state.rf.rsrp,
-                rsrq: state.rf.rsrq,
-                sinr: state.rf.sinr,
-                rssi: state.rf.rssi
-            };
-            state.liveSamples.push(sampleObj);
-            if (state.liveSamples.length > 10000) state.liveSamples.shift();
-
-            addLog('RF', 'RX', `${sampleObj.tech} (${sampleObj.band}) PCI:${sampleObj.cell_id}`,
-                `RSRP: ${sampleObj.rsrp} dBm | RSRQ: ${sampleObj.rsrq} dB | SINR: ${sampleObj.sinr} dB`);
-
-            if (state.rf.rsrp !== null) {
+                state.history = Array.isArray(state.history) ? state.history : [];
                 state.history.push({
-                    rsrp: state.rf.rsrp,
-                    rssi: state.rf.rssi !== null ? state.rf.rssi : state.rf.rsrp + 22,
-                    sinr: state.rf.sinr !== null ? state.rf.sinr : 0
+                    rsrp: typeof state.rf.rsrp === 'number' ? state.rf.rsrp : -95,
+                    rssi: typeof state.rf.rssi === 'number' ? state.rf.rssi : -75,
+                    sinr: typeof state.rf.sinr === 'number' ? state.rf.sinr : 5,
+                    ts: Date.now()
                 });
-                if (state.history.length > MAX_HISTORY) state.history.shift();
-            }
+                if (state.history.length > (typeof MAX_HISTORY === 'number' ? MAX_HISTORY : 90)) {
+                    state.history.shift();
+                }
 
-            updateLiveUI();
+                state.liveSamples = Array.isArray(state.liveSamples) ? state.liveSamples : [];
+                state.liveSamples.push({
+                    timestamp: new Date().toISOString(),
+                    rat: state.activeRat,
+                    tech: state.servingCell.tech,
+                    band: state.servingCell.band,
+                    plmn: state.servingCell.plmn,
+                    cell_id: state.servingCell.pci,
+                    arfcn: state.servingCell.arfcn,
+                    tac: state.servingCell.tac,
+                    rsrp: state.rf.rsrp,
+                    rsrq: state.rf.rsrq,
+                    sinr: state.rf.sinr,
+                    rssi: state.rf.rssi
+                });
+                if (state.liveSamples.length > 500) state.liveSamples.shift();
+
+                if (typeof updateLiveUI === 'function') updateLiveUI();
+                if (typeof drawLiveChartOnce === 'function') drawLiveChartOnce();
+            } catch (err) {
+                try { console.error('onRealModemData error:', err); } catch (_e) {}
+            }
         };
 
         function updateLiveUI() {
