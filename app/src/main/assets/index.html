@@ -157,10 +157,11 @@
             <div class="bg-slate-900 border border-slate-800 rounded-lg p-1.5">
                 <div class="flex justify-between items-center text-[10px]">
                     <span id="kpi2-name" class="font-bold text-slate-400">RSRQ</span>
-                    <span id="kpi2-unit" class="text-[9px] text-slate-500">dB</span>
+                    <span id="rsrq-badge" class="text-[9px] px-1 rounded bg-slate-800 text-slate-400">--</span>
                 </div>
-                <div class="my-0.5">
+                <div class="my-0.5 whitespace-nowrap">
                     <span id="val-rsrq" class="text-base font-black text-cyan-400 mono">---</span>
+                    <span id="kpi2-unit" class="text-[9px] text-slate-400 whitespace-nowrap inline mr-0.5">dB</span>
                 </div>
                 <div class="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
                     <div id="bar-rsrq" class="bg-cyan-400 h-full" style="width: 0%"></div>
@@ -170,10 +171,11 @@
             <div class="bg-slate-900 border border-slate-800 rounded-lg p-1.5">
                 <div class="flex justify-between items-center text-[10px]">
                     <span id="kpi3-name" class="font-bold text-slate-400">SINR</span>
-                    <span class="text-[9px] text-slate-400 whitespace-nowrap inline mr-0.5">dB</span>
+                    <span id="sinr-badge" class="text-[9px] px-1 rounded bg-slate-800 text-slate-400">--</span>
                 </div>
-                <div class="my-0.5">
+                <div class="my-0.5 whitespace-nowrap">
                     <span id="val-sinr" class="text-base font-black text-indigo-400 mono">---</span>
+                    <span class="text-[9px] text-slate-400 whitespace-nowrap inline mr-0.5">dB</span>
                 </div>
                 <div class="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
                     <div id="bar-sinr" class="bg-indigo-400 h-full" style="width: 0%"></div>
@@ -183,10 +185,11 @@
             <div class="bg-slate-900 border border-slate-800 rounded-lg p-1.5">
                 <div class="flex justify-between items-center text-[10px]">
                     <span class="font-bold text-slate-400">RSSI</span>
-                    <span class="text-[9px] text-slate-400 whitespace-nowrap inline mr-0.5">dBm</span>
+                    <span id="rssi-badge" class="text-[9px] px-1 rounded bg-slate-800 text-slate-400">--</span>
                 </div>
-                <div class="my-0.5">
+                <div class="my-0.5 whitespace-nowrap">
                     <span id="val-rssi" class="text-base font-black text-amber-400 mono">---</span>
+                    <span class="text-[9px] text-slate-400 whitespace-nowrap inline mr-0.5">dBm</span>
                 </div>
                 <div class="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
                     <div id="bar-rssi" class="bg-amber-400 h-full" style="width: 0%"></div>
@@ -2923,12 +2926,13 @@ ${sampledRows.join('\n')}`;
 </script>
 
 
-<script id="rt-comprehensive-ui-v41">
-(function() {
-  if (window.__rtComprehensiveUiV41) return;
-  window.__rtComprehensiveUiV41 = true;
 
-  const BAND_RANGES = {
+<script id="rt-surgical-ui-v41">
+(function() {
+  if (window.__rtSurgicalUiV41) return;
+  window.__rtSurgicalUiV41 = true;
+
+  const BANDS = {
     "B1": "2100 MHz (1920-1980 / 2110-2170 MHz)",
     "B3": "1800 MHz (1710-1785 / 1805-1880 MHz)",
     "B7": "2600 MHz (2500-2570 / 2620-2690 MHz)",
@@ -2939,30 +2943,16 @@ ${sampledRows.join('\n')}`;
     "n78": "3500 MHz NR (3300-3800 MHz)"
   };
 
-  function normalizeBandDisplay(raw) {
-    if (!raw || String(raw).trim() === "---") return "---";
-    const cleaned = String(raw).replace(/\)\)+/g, ")").replace(/\(\(+/g, "(").trim();
-    const match = cleaned.match(/\b(n?\d{1,3})\b/i);
-    if (!match) return cleaned;
-    const code = match[1].toLowerCase().startsWith("n") ? "n" + match[1].slice(1) : "B" + match[1];
-    const info = BAND_RANGES[code];
-    return info ? `${code} (${info})` : cleaned;
+  function fmtBand(val) {
+    if (!val || String(val).trim() === "---") return "---";
+    const s = String(val).replace(/\)\)+/g, ")").replace(/\(\(+/g, "(").trim();
+    const m = s.match(/\b(n?\d{1,3})\b/i);
+    if (!m) return s;
+    const code = m[1].toLowerCase().startsWith("n") ? "n" + m[1].slice(1) : "B" + m[1];
+    return BANDS[code] ? `${code} (${BANDS[code]})` : s;
   }
 
-  function hideDuplicateFloatingControls() {
-    // Hide duplicate secondary exit buttons outside #rt-unified-exit-btn and floating strips
-    document.querySelectorAll("button").forEach(btn => {
-      if (btn.id === "rt-unified-exit-btn") return;
-      const txt = (btn.textContent || "").trim();
-      if (txt === "יציאה" || txt === "4636" || txt === "📱 4636") {
-        btn.style.display = "none";
-      }
-    });
-    const strayStrip = document.getElementById("rt-exit-action-strip");
-    if (strayStrip) strayStrip.style.display = "none";
-  }
-
-  window.rtUnifiedExitApp = function() {
+  window.rtTriggerCleanExit = function() {
     try { if (typeof window.rtPersistFullStateNow === "function") window.rtPersistFullStateNow(); } catch (_e) {}
     try {
       if (window.AndroidModem && typeof window.AndroidModem.exitApp === "function") {
@@ -2973,98 +2963,89 @@ ${sampledRows.join('\n')}`;
     try { window.close(); } catch (_e) {}
   };
 
-  window.rtUnifiedOpenHelp = function() {
-    let modal = document.getElementById("rt-unified-help-modal");
-    if (!modal) {
-      modal = document.createElement("div");
-      modal.id = "rt-unified-help-modal";
-      modal.style.cssText = "position:fixed;inset:0;background:rgba(2,6,23,0.86);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;";
-      modal.innerHTML = `
+  window.rtOpenHelpWith4636 = function() {
+    let dlg = document.getElementById("rt-help-4636-dlg");
+    if (!dlg) {
+      dlg = document.createElement("div");
+      dlg.id = "rt-help-4636-dlg";
+      dlg.style.cssText = "position:fixed;inset:0;background:rgba(2,6,23,0.86);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;";
+      dlg.innerHTML = `
         <div style="width:100%;max-width:380px;background:#0f172a;border:1px solid #334155;border-radius:12px;padding:14px;color:#f8fafc;text-align:right;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
             <strong style="font-size:14px;">עזרה ותפריט טכנאי (4636)</strong>
-            <button type="button" id="rt-close-unified-help" style="background:#334155;color:#fff;border:none;border-radius:6px;padding:3px 9px;font-size:11px;cursor:pointer;">סגור</button>
+            <button type="button" id="rt-close-4636-dlg" style="background:#334155;color:#fff;border:none;border-radius:6px;padding:3px 9px;font-size:11px;cursor:pointer;">סגור</button>
           </div>
-          <p style="font-size:11px;color:#cbd5e1;margin:0 0 10px 0;">
-            אבחון מתקדם והגדרות מודם (4636) מרוכזים כאן במקום בשורת הכותרות.
-          </p>
+          <p style="font-size:11px;color:#cbd5e1;margin:0 0 10px 0;">אבחון מתקדם והגדרות מודם (4636) מרוכזים כאן.</p>
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button type="button" id="rt-launch-4636" style="background:#0284c7;color:#fff;border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;">פתיחת תפריט 4636</button>
-            <button type="button" id="rt-launch-help-center" style="background:#1e293b;color:#e2e8f0;border:1px solid #475569;border-radius:8px;padding:7px 12px;font-size:12px;cursor:pointer;">מרכז עזרה מלא</button>
+            <button type="button" id="rt-open-4636-btn" style="background:#0284c7;color:#fff;border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;">פתיחת תפריט 4636</button>
+            <button type="button" id="rt-open-guide-btn" style="background:#1e293b;color:#e2e8f0;border:1px solid #475569;border-radius:8px;padding:7px 12px;font-size:12px;cursor:pointer;">מדריך הפעלה</button>
           </div>
         </div>
       `;
-      document.body.appendChild(modal);
-      modal.addEventListener("click", ev => { if (ev.target === modal) modal.style.display = "none"; });
-      document.getElementById("rt-close-unified-help").addEventListener("click", () => { modal.style.display = "none"; });
-      document.getElementById("rt-launch-4636").addEventListener("click", () => {
-        if (window.AndroidModem && typeof window.AndroidModem.dialTechnicianCode === "function") {
-          window.AndroidModem.dialTechnicianCode("*#*#4636#*#*");
-        } else if (typeof openRealDeviceSettings === "function") {
-          openRealDeviceSettings();
-        }
+      document.body.appendChild(dlg);
+      dlg.addEventListener("click", e => { if (e.target === dlg) dlg.style.display = "none"; });
+      document.getElementById("rt-close-4636-dlg").addEventListener("click", () => { dlg.style.display = "none"; });
+      document.getElementById("rt-open-4636-btn").addEventListener("click", () => {
+        if (typeof openRealDeviceSettings === "function") openRealDeviceSettings();
       });
-      document.getElementById("rt-launch-help-center").addEventListener("click", () => {
-        modal.style.display = "none";
+      document.getElementById("rt-open-guide-btn").addEventListener("click", () => {
+        dlg.style.display = "none";
         if (typeof openHelpCenter === "function") openHelpCenter();
       });
     }
-    modal.style.display = "flex";
+    dlg.style.display = "flex";
   };
 
-  function ensureMapTabSection() {
+  function ensureMapView() {
     if (document.getElementById("view-map")) return;
-    const liveEl = document.getElementById("view-live");
-    const container = (liveEl && liveEl.parentElement) || document.body;
-
-    const section = document.createElement("section");
-    section.id = "view-map";
-    section.className = "tab-view flex-1 flex flex-col p-2 gap-2 overflow-y-auto";
-    section.style.display = "none";
-    section.innerHTML = `
+    const liveView = document.getElementById("view-live");
+    const host = (liveView && liveView.parentElement) || document.body;
+    const sec = document.createElement("section");
+    sec.id = "view-map";
+    sec.className = "tab-view flex-1 flex flex-col p-2 gap-2 overflow-y-auto hidden";
+    sec.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;background:#0f172a;border:1px solid #1e293b;border-radius:10px;padding:8px 10px;">
         <strong style="font-size:12px;">מפת תחנות בסיס בישראל ומיקום חי</strong>
-        <button type="button" id="rt-map-center-btn" style="background:#2563eb;color:#fff;border:none;border-radius:7px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;">מרכז למיקומי הנוכחי</button>
+        <button type="button" id="rt-map-center-now" style="background:#2563eb;color:#fff;border:none;border-radius:7px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;">מרכז למיקומי הנוכחי</button>
       </div>
-      <div id="rt-map-viewport" style="position:relative;width:100%;height:330px;background:#061021;border:1px solid #1e3a5f;border-radius:10px;overflow:hidden;">
-        <div id="rt-map-live-tooltip" style="position:absolute;top:10px;right:10px;max-width:255px;background:rgba(15,23,42,0.94);border:1px solid #38bdf8;border-radius:8px;padding:7px 9px;font-size:10px;line-height:1.4;color:#f8fafc;z-index:20;pointer-events:none;">
+      <div id="rt-map-stage" style="position:relative;width:100%;height:330px;background:#061021;border:1px solid #1e3a5f;border-radius:10px;overflow:hidden;">
+        <div id="rt-map-tooltip" style="position:absolute;top:10px;right:10px;max-width:255px;background:rgba(15,23,42,0.94);border:1px solid #38bdf8;border-radius:8px;padding:7px 9px;font-size:10px;line-height:1.4;color:#f8fafc;z-index:20;pointer-events:none;">
           ממתין למיקום ולתחנה מחוברת...
         </div>
       </div>
     `;
+    if (liveView && liveView.nextSibling) host.insertBefore(sec, liveView.nextSibling);
+    else host.appendChild(sec);
 
-    if (liveEl && liveEl.nextSibling) container.insertBefore(section, liveEl.nextSibling);
-    else container.appendChild(section);
-
-    const ilSites = [
+    const towers = [
       { lat: 31.8044, lon: 34.6553 },
       { lat: 32.0741, lon: 34.7922 },
       { lat: 31.7781, lon: 35.1984 },
       { lat: 32.8012, lon: 34.9896 },
       { lat: 31.2518, lon: 34.7913 }
     ];
-    let currentPos = { lat: 31.8044, lon: 34.6553 };
-    let followCurrent = true;
+    let gps = { lat: 31.8044, lon: 34.6553 };
+    let centered = true;
 
-    function toCanvasXY(lat, lon, w, h) {
+    function toXY(lat, lon, w, h) {
       const x = ((lon - 34.2) / (35.9 - 34.2)) * (w - 32) + 16;
       const y = h - (((lat - 29.5) / (33.3 - 29.5)) * (h - 32) + 16);
       return { x: Math.max(12, Math.min(w - 12, x)), y: Math.max(12, Math.min(h - 12, y)) };
     }
 
-    window.rtDrawIsraelMap = function() {
-      const vp = document.getElementById("rt-map-viewport");
-      const tip = document.getElementById("rt-map-live-tooltip");
-      if (!vp || !tip) return;
-      let svg = vp.querySelector("svg");
+    window.rtRenderIsraelMap = function() {
+      const stage = document.getElementById("rt-map-stage");
+      const tip = document.getElementById("rt-map-tooltip");
+      if (!stage || !tip) return;
+      let svg = stage.querySelector("svg");
       if (!svg) {
         svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
         svg.setAttribute("width", "100%");
         svg.setAttribute("height", "100%");
-        vp.insertBefore(svg, tip);
+        stage.insertBefore(svg, tip);
       }
-      const w = vp.clientWidth || 340;
-      const h = vp.clientHeight || 330;
+      const w = stage.clientWidth || 340;
+      const h = stage.clientHeight || 330;
       svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
       while (svg.firstChild) svg.removeChild(svg.firstChild);
 
@@ -3073,17 +3054,17 @@ ${sampledRows.join('\n')}`;
       const rf = st.rf || {};
       const pci = sc.pci ?? sc.physicalCellId ?? "-";
       const cid = sc.eci ?? sc.nci ?? sc.cid ?? "-";
-      const band = normalizeBandDisplay(sc.band || sc.earfcn || "-");
+      const band = fmtBand(sc.band || sc.earfcn || "-");
       const rsrp = rf.rsrp ?? sc.rsrp ?? "-";
       const sinr = rf.sinr ?? sc.sinr ?? "-";
 
-      const uPt = followCurrent ? { x: w * 0.5, y: h * 0.62 } : toCanvasXY(currentPos.lat, currentPos.lon, w, h);
-      const tPt = toCanvasXY(ilSites[0].lat, ilSites[0].lon, w, h);
+      const uPt = centered ? { x: w * 0.5, y: h * 0.62 } : toXY(gps.lat, gps.lon, w, h);
+      const tPt = toXY(towers[0].lat, towers[0].lon, w, h);
 
-      ilSites.forEach(s => {
-        const pt = followCurrent
-          ? { x: uPt.x + (s.lon - currentPos.lon) * 140, y: uPt.y - (s.lat - currentPos.lat) * 140 }
-          : toCanvasXY(s.lat, s.lon, w, h);
+      towers.forEach(tw => {
+        const pt = centered
+          ? { x: uPt.x + (tw.lon - gps.lon) * 140, y: uPt.y - (tw.lat - gps.lat) * 140 }
+          : toXY(tw.lat, tw.lon, w, h);
         const dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
         dot.setAttribute("cx", String(pt.x));
         dot.setAttribute("cy", String(pt.y));
@@ -3101,126 +3082,100 @@ ${sampledRows.join('\n')}`;
       line.setAttribute("stroke-width", "3.5");
       svg.appendChild(line);
 
-      const uDot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-      uDot.setAttribute("cx", String(uPt.x));
-      uDot.setAttribute("cy", String(uPt.y));
-      uDot.setAttribute("r", "7");
-      uDot.setAttribute("fill", "#22c55e");
-      uDot.setAttribute("stroke", "#ffffff");
-      uDot.setAttribute("stroke-width", "2");
-      svg.appendChild(uDot);
+      const me = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      me.setAttribute("cx", String(uPt.x));
+      me.setAttribute("cy", String(uPt.y));
+      me.setAttribute("r", "7");
+      me.setAttribute("fill", "#22c55e");
+      me.setAttribute("stroke", "#ffffff");
+      me.setAttribute("stroke-width", "2");
+      svg.appendChild(me);
 
-      tip.style.top = `${Math.max(8, Math.min(h - 94, uPt.y - 76))}px`;
+      tip.style.top = `${Math.max(8, Math.min(h - 92, uPt.y - 74))}px`;
       tip.style.left = `${Math.max(8, Math.min(w - 250, uPt.x - 108))}px`;
       tip.innerHTML = `
-        <div><strong>מיקום:</strong> <span dir="ltr">${currentPos.lat.toFixed(4)}, ${currentPos.lon.toFixed(4)}</span></div>
+        <div><strong>מיקום:</strong> <span dir="ltr">${gps.lat.toFixed(4)}, ${gps.lon.toFixed(4)}</span></div>
         <div><strong>תחנה מחוברת:</strong> PCI <span dir="ltr">${pci}</span> | ID <span dir="ltr">${cid}</span></div>
         <div><strong>תדר:</strong> <span dir="ltr">${band}</span></div>
         <div><strong>קליטה:</strong> <span dir="ltr">RSRP ${rsrp} dBm | SINR ${sinr} dB</span></div>
       `;
     };
 
-    document.getElementById("rt-map-center-btn").addEventListener("click", () => {
-      followCurrent = true;
+    document.getElementById("rt-map-center-now").addEventListener("click", () => {
+      centered = true;
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(p => {
-          currentPos = { lat: p.coords.latitude, lon: p.coords.longitude };
-          window.rtDrawIsraelMap();
-        }, () => window.rtDrawIsraelMap(), { enableHighAccuracy: true, timeout: 4000 });
+          gps = { lat: p.coords.latitude, lon: p.coords.longitude };
+          window.rtRenderIsraelMap();
+        }, () => window.rtRenderIsraelMap(), { enableHighAccuracy: true, timeout: 4000 });
       } else {
-        window.rtDrawIsraelMap();
+        window.rtRenderIsraelMap();
       }
     });
   }
 
-  window.rtUnifiedSwitchTab = function(tabName) {
-    ensureMapTabSection();
+  // Hook into existing switchTab so all 5 tabs work seamlessly together
+  const origSwitchTab = window.switchTab;
+  window.switchTab = function(tabName) {
+    ensureMapView();
+    const mapView = document.getElementById("view-map");
     if (tabName === "map") {
-      document.querySelectorAll(".tab-view").forEach(v => { v.style.display = "none"; });
+      document.querySelectorAll(".tab-view").forEach(v => v.classList.add("hidden"));
       document.querySelectorAll(".tab-btn").forEach(b => {
-        b.classList.remove("bg-cyan-600", "text-white");
-        b.classList.add("text-slate-400");
+        b.className = "tab-btn py-1 rounded-md text-slate-400 hover:text-white transition";
       });
-      const mv = document.getElementById("view-map");
+      if (mapView) mapView.classList.remove("hidden");
       const mb = document.getElementById("tab-btn-map");
-      if (mv) mv.style.display = "flex";
-      if (mb) {
-        mb.classList.remove("text-slate-400");
-        mb.classList.add("bg-cyan-600", "text-white");
-      }
-      window.rtDrawIsraelMap();
+      if (mb) mb.className = "tab-btn py-1 rounded-md bg-cyan-600 text-white transition";
+      window.rtRenderIsraelMap();
       return;
     }
-    const mv = document.getElementById("view-map");
-    if (mv) mv.style.display = "none";
-    const mb = document.getElementById("tab-btn-map");
-    if (mb) {
-      mb.classList.remove("bg-cyan-600", "text-white");
-      mb.classList.add("text-slate-400");
-    }
-    if (typeof switchTab === "function") switchTab(tabName);
+    if (mapView) mapView.classList.add("hidden");
+    if (typeof origSwitchTab === "function") origSwitchTab(tabName);
   };
 
-  function syncTelemetryLabelsAndChart() {
-    hideDuplicateFloatingControls();
+  function syncBandAndChartBtn() {
     ["cell-band", "cell-bw"].forEach(id => {
       const el = document.getElementById(id);
       if (el && el.textContent && el.textContent.trim() !== "---") {
-        const next = normalizeBandDisplay(el.textContent);
+        const next = fmtBand(el.textContent);
         if (el.textContent !== next) el.textContent = next;
       }
     });
 
-    document.querySelectorAll("span, div, small").forEach(el => {
-      if (el.children.length === 0 && !el.dataset.rtInlineUnit) {
-        const t = (el.textContent || "").trim();
-        if (t === "dBm" || t === "dB") {
-          el.dataset.rtInlineUnit = "1";
-          el.style.whiteSpace = "nowrap";
-          el.style.display = "inline";
-          el.style.marginRight = "3px";
-          if (el.parentElement) el.parentElement.style.whiteSpace = "nowrap";
-        }
-      }
-    });
-
-    const canvases = Array.from(document.querySelectorAll("canvas"));
-    const chartCanvas = canvases.find(c => /signal|chart|live/i.test(c.id || "")) || canvases[0];
-    if (chartCanvas && !chartCanvas.dataset.rtChartEnhanced) {
-      chartCanvas.dataset.rtChartEnhanced = "1";
-      const box = chartCanvas.parentElement;
-      if (box) {
-        box.style.minHeight = "220px";
-        const bar = document.createElement("div");
-        bar.style.cssText = "display:flex;justify-content:space-between;align-items:center;gap:6px;font-size:10px;color:#94a3b8;margin-bottom:4px;";
-        bar.innerHTML = `
-          <span>ציר Y: dBm/dB | ציר X: דגימות</span>
-          <button type="button" id="rt-chart-size-toggle" style="background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:5px;padding:2px 8px;font-size:10px;cursor:pointer;">הגדל גרף</button>
-        `;
-        box.insertBefore(bar, chartCanvas);
-        document.getElementById("rt-chart-size-toggle").addEventListener("click", function() {
-          const isBig = box.dataset.rtExpanded === "1";
-          box.dataset.rtExpanded = isBig ? "0" : "1";
-          box.style.height = isBig ? "" : "360px";
-          chartCanvas.style.height = isBig ? "170px" : "300px";
-          this.textContent = isBig ? "הגדל גרף" : "צמצם גרף";
+    const chartSec = document.getElementById("rfChart") ? document.getElementById("rfChart").closest("section") : null;
+    if (chartSec && !document.getElementById("rt-chart-expand-btn")) {
+      const hdr = chartSec.querySelector("div");
+      if (hdr) {
+        const btn = document.createElement("button");
+        btn.id = "rt-chart-expand-btn";
+        btn.type = "button";
+        btn.textContent = "הגדל גרף";
+        btn.style.cssText = "background:#1e293b;color:#e2e8f0;border:1px solid #475569;border-radius:5px;padding:1px 7px;font-size:10px;cursor:pointer;";
+        btn.addEventListener("click", function() {
+          const big = chartSec.dataset.rtExpanded === "1";
+          chartSec.dataset.rtExpanded = big ? "0" : "1";
+          chartSec.style.minHeight = big ? "85px" : "240px";
+          chartSec.style.flex = big ? "1 1 0%" : "0 0 240px";
+          this.textContent = big ? "הגדל גרף" : "צמצם גרף";
         });
+        hdr.appendChild(btn);
       }
     }
 
-    const mapSec = document.getElementById("view-map");
-    if (mapSec && mapSec.style.display !== "none" && typeof window.rtDrawIsraelMap === "function") {
-      window.rtDrawIsraelMap();
+    const mv = document.getElementById("view-map");
+    if (mv && !mv.classList.contains("hidden") && typeof window.rtRenderIsraelMap === "function") {
+      window.rtRenderIsraelMap();
     }
   }
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", () => { ensureMapTabSection(); syncTelemetryLabelsAndChart(); });
+    document.addEventListener("DOMContentLoaded", () => { ensureMapView(); syncBandAndChartBtn(); });
   } else {
-    ensureMapTabSection();
-    syncTelemetryLabelsAndChart();
+    ensureMapView();
+    syncBandAndChartBtn();
   }
-  setInterval(syncTelemetryLabelsAndChart, 2500);
+  setInterval(syncBandAndChartBtn, 2500);
 })();
 </script>
 
