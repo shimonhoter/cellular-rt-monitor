@@ -147,7 +147,7 @@
                 </div>
                 <div class="my-0.5">
                     <span id="val-rsrp" class="text-base font-black text-emerald-400 mono">---</span>
-                    <span class="text-[9px] text-slate-500">dBm</span>
+                    <span class="text-[9px] text-slate-400 whitespace-nowrap inline mr-0.5">dBm</span>
                 </div>
                 <div class="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
                     <div id="bar-rsrp" class="bg-emerald-400 h-full" style="width: 0%"></div>
@@ -170,7 +170,7 @@
             <div class="bg-slate-900 border border-slate-800 rounded-lg p-1.5">
                 <div class="flex justify-between items-center text-[10px]">
                     <span id="kpi3-name" class="font-bold text-slate-400">SINR</span>
-                    <span class="text-[9px] text-slate-500">dB</span>
+                    <span class="text-[9px] text-slate-400 whitespace-nowrap inline mr-0.5">dB</span>
                 </div>
                 <div class="my-0.5">
                     <span id="val-sinr" class="text-base font-black text-indigo-400 mono">---</span>
@@ -183,7 +183,7 @@
             <div class="bg-slate-900 border border-slate-800 rounded-lg p-1.5">
                 <div class="flex justify-between items-center text-[10px]">
                     <span class="font-bold text-slate-400">RSSI</span>
-                    <span class="text-[9px] text-slate-500">dBm</span>
+                    <span class="text-[9px] text-slate-400 whitespace-nowrap inline mr-0.5">dBm</span>
                 </div>
                 <div class="my-0.5">
                     <span id="val-rssi" class="text-base font-black text-amber-400 mono">---</span>
@@ -406,7 +406,8 @@
             <div class="flex flex-col gap-1.5">
                 <button onclick="openDevOptionsNative()" class="w-full py-2 px-3 bg-cyan-600 text-white rounded-lg text-xs font-bold">⚙️ פתח Developer Options</button>
                 <button onclick="openShizukuAppNative()" class="w-full py-2 px-3 bg-indigo-600 text-white rounded-lg text-xs font-bold">🚀 פתח אפליקציית Shizuku</button>
-                <button onclick="openHelpCenter()" class="w-full py-2 px-3 bg-emerald-600/20 text-emerald-300 border border-emerald-500/40 rounded-lg text-xs font-bold">❓ פתח מדריך התקנה מלא (כולל צילומי מסך)</button>
+                <button type="button" id="rt-unified-exit-btn" onclick="rtUnifiedExitApp()" class="px-2 py-0.5 rounded text-[10px] font-bold bg-red-700/90 hover:bg-red-600 text-white border border-red-400/60 whitespace-nowrap">יציאה</button>
+                <button type="button" id="rt-unified-help-btn" onclick="rtUnifiedOpenHelp()"  class="w-full py-2 px-3 bg-emerald-600/20 text-emerald-300 border border-emerald-500/40 rounded-lg text-xs font-bold">❓ פתח מדריך התקנה מלא (כולל צילומי מסך)</button>
                 <button onclick="closeShizukuModal()" class="w-full py-1.5 px-3 bg-slate-800 text-slate-300 rounded-lg text-xs">סגור (צפייה בנתונים בלבד)</button>
             </div>
         </div>
@@ -2921,33 +2922,47 @@ ${sampledRows.join('\n')}`;
 
 </script>
 
-<script id="rt-clean-standard-ui-v41">
-(function() {
-  if (window.__rtCleanStandardUiV41) return;
-  window.__rtCleanStandardUiV41 = true;
 
-  const BAND_FREQ_MAP = {
-    "B1": "2100 MHz (1920–1980 / 2110–2170 MHz)",
-    "B3": "1800 MHz (1710–1785 / 1805–1880 MHz)",
-    "B7": "2600 MHz (2500–2570 / 2620–2690 MHz)",
-    "B8": "900 MHz (880–915 / 925–960 MHz)",
-    "B20": "800 MHz (832–862 / 791–821 MHz)",
-    "B28": "700 MHz (703–748 / 758–803 MHz)",
-    "n28": "700 MHz NR (703–748 / 758–803 MHz)",
-    "n78": "3500 MHz NR (3300–3800 MHz)"
+<script id="rt-comprehensive-ui-v41">
+(function() {
+  if (window.__rtComprehensiveUiV41) return;
+  window.__rtComprehensiveUiV41 = true;
+
+  const BAND_RANGES = {
+    "B1": "2100 MHz (1920-1980 / 2110-2170 MHz)",
+    "B3": "1800 MHz (1710-1785 / 1805-1880 MHz)",
+    "B7": "2600 MHz (2500-2570 / 2620-2690 MHz)",
+    "B8": "900 MHz (880-915 / 925-960 MHz)",
+    "B20": "800 MHz (832-862 / 791-821 MHz)",
+    "B28": "700 MHz (703-748 / 758-803 MHz)",
+    "n28": "700 MHz NR (703-748 / 758-803 MHz)",
+    "n78": "3500 MHz NR (3300-3800 MHz)"
   };
 
-  function cleanBandText(raw) {
-    if (!raw) return "---";
-    const s = String(raw).replace(/\)\)+/g, ")").replace(/\(\(+/g, "(").trim();
-    const m = s.match(/(n?\d{1,3})/i);
-    if (!m) return s;
-    const code = m[1].toLowerCase().startsWith("n") ? "n" + m[1].slice(1) : "B" + m[1];
-    const info = BAND_FREQ_MAP[code];
-    return info ? `${code} (${info})` : s;
+  function normalizeBandDisplay(raw) {
+    if (!raw || String(raw).trim() === "---") return "---";
+    const cleaned = String(raw).replace(/\)\)+/g, ")").replace(/\(\(+/g, "(").trim();
+    const match = cleaned.match(/\b(n?\d{1,3})\b/i);
+    if (!match) return cleaned;
+    const code = match[1].toLowerCase().startsWith("n") ? "n" + match[1].slice(1) : "B" + match[1];
+    const info = BAND_RANGES[code];
+    return info ? `${code} (${info})` : cleaned;
   }
 
-  window.rtTriggerCleanExit = function() {
+  function hideDuplicateFloatingControls() {
+    // Hide duplicate secondary exit buttons outside #rt-unified-exit-btn and floating strips
+    document.querySelectorAll("button").forEach(btn => {
+      if (btn.id === "rt-unified-exit-btn") return;
+      const txt = (btn.textContent || "").trim();
+      if (txt === "יציאה" || txt === "4636" || txt === "📱 4636") {
+        btn.style.display = "none";
+      }
+    });
+    const strayStrip = document.getElementById("rt-exit-action-strip");
+    if (strayStrip) strayStrip.style.display = "none";
+  }
+
+  window.rtUnifiedExitApp = function() {
     try { if (typeof window.rtPersistFullStateNow === "function") window.rtPersistFullStateNow(); } catch (_e) {}
     try {
       if (window.AndroidModem && typeof window.AndroidModem.exitApp === "function") {
@@ -2958,42 +2973,38 @@ ${sampledRows.join('\n')}`;
     try { window.close(); } catch (_e) {}
   };
 
-  window.rtOpenHelpWith4636 = function() {
-    let modal = document.getElementById("rt-help-4636-modal");
+  window.rtUnifiedOpenHelp = function() {
+    let modal = document.getElementById("rt-unified-help-modal");
     if (!modal) {
       modal = document.createElement("div");
-      modal.id = "rt-help-4636-modal";
-      modal.style.cssText = "position:fixed;inset:0;background:rgba(2,6,23,0.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;";
+      modal.id = "rt-unified-help-modal";
+      modal.style.cssText = "position:fixed;inset:0;background:rgba(2,6,23,0.86);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;";
       modal.innerHTML = `
         <div style="width:100%;max-width:380px;background:#0f172a;border:1px solid #334155;border-radius:12px;padding:14px;color:#f8fafc;text-align:right;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
             <strong style="font-size:14px;">עזרה ותפריט טכנאי (4636)</strong>
-            <button type="button" id="rt-close-help-4636" style="background:#334155;color:#fff;border:none;border-radius:6px;padding:3px 9px;font-size:11px;cursor:pointer;">סגור</button>
+            <button type="button" id="rt-close-unified-help" style="background:#334155;color:#fff;border:none;border-radius:6px;padding:3px 9px;font-size:11px;cursor:pointer;">סגור</button>
           </div>
           <p style="font-size:11px;color:#cbd5e1;margin:0 0 10px 0;">
-            הגדרות מודם ואבחון טכנאי (*#*#4636#*#*) מרוכזים כאן במקום בשורת הכותרות.
+            אבחון מתקדם והגדרות מודם (4636) מרוכזים כאן במקום בשורת הכותרות.
           </p>
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button type="button" id="rt-run-4636-btn" style="background:#0284c7;color:#fff;border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;">
-              פתיחת תפריט 4636
-            </button>
-            <button type="button" id="rt-open-web-help-btn" style="background:#1e293b;color:#e2e8f0;border:1px solid #475569;border-radius:8px;padding:7px 12px;font-size:12px;cursor:pointer;">
-              מרכז עזרה מלא
-            </button>
+            <button type="button" id="rt-launch-4636" style="background:#0284c7;color:#fff;border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;">פתיחת תפריט 4636</button>
+            <button type="button" id="rt-launch-help-center" style="background:#1e293b;color:#e2e8f0;border:1px solid #475569;border-radius:8px;padding:7px 12px;font-size:12px;cursor:pointer;">מרכז עזרה מלא</button>
           </div>
         </div>
       `;
       document.body.appendChild(modal);
       modal.addEventListener("click", ev => { if (ev.target === modal) modal.style.display = "none"; });
-      document.getElementById("rt-close-help-4636").addEventListener("click", () => { modal.style.display = "none"; });
-      document.getElementById("rt-run-4636-btn").addEventListener("click", () => {
+      document.getElementById("rt-close-unified-help").addEventListener("click", () => { modal.style.display = "none"; });
+      document.getElementById("rt-launch-4636").addEventListener("click", () => {
         if (window.AndroidModem && typeof window.AndroidModem.dialTechnicianCode === "function") {
           window.AndroidModem.dialTechnicianCode("*#*#4636#*#*");
         } else if (typeof openRealDeviceSettings === "function") {
           openRealDeviceSettings();
         }
       });
-      document.getElementById("rt-open-web-help-btn").addEventListener("click", () => {
+      document.getElementById("rt-launch-help-center").addEventListener("click", () => {
         modal.style.display = "none";
         if (typeof openHelpCenter === "function") openHelpCenter();
       });
@@ -3001,62 +3012,59 @@ ${sampledRows.join('\n')}`;
     modal.style.display = "flex";
   };
 
-  function ensureMapSection() {
+  function ensureMapTabSection() {
     if (document.getElementById("view-map")) return;
-    const liveMain = document.getElementById("view-live");
-    const parent = (liveMain && liveMain.parentElement) || document.body;
-    const sec = document.createElement("section");
-    sec.id = "view-map";
-    sec.className = "tab-view flex-1 flex flex-col p-2 gap-2 overflow-y-auto";
-    sec.style.display = "none";
-    sec.innerHTML = `
+    const liveEl = document.getElementById("view-live");
+    const container = (liveEl && liveEl.parentElement) || document.body;
+
+    const section = document.createElement("section");
+    section.id = "view-map";
+    section.className = "tab-view flex-1 flex flex-col p-2 gap-2 overflow-y-auto";
+    section.style.display = "none";
+    section.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;background:#0f172a;border:1px solid #1e293b;border-radius:10px;padding:8px 10px;">
-        <strong style="font-size:12px;">מפת תחנות בסיס בישראל ומיקום נוכחי</strong>
-        <button type="button" id="rt-recenter-map-btn" style="background:#2563eb;color:#fff;border:none;border-radius:7px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;">
-          מרכז למיקומי הנוכחי
-        </button>
+        <strong style="font-size:12px;">מפת תחנות בסיס בישראל ומיקום חי</strong>
+        <button type="button" id="rt-map-center-btn" style="background:#2563eb;color:#fff;border:none;border-radius:7px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;">מרכז למיקומי הנוכחי</button>
       </div>
-      <div id="rt-il-map-stage" style="position:relative;width:100%;height:320px;background:#061021;border:1px solid #1e3a5f;border-radius:10px;overflow:hidden;">
-        <div id="rt-il-map-tooltip" style="position:absolute;top:10px;right:10px;max-width:250px;background:rgba(15,23,42,0.94);border:1px solid #38bdf8;border-radius:8px;padding:7px 9px;font-size:10px;line-height:1.4;color:#f8fafc;z-index:20;pointer-events:none;">
+      <div id="rt-map-viewport" style="position:relative;width:100%;height:330px;background:#061021;border:1px solid #1e3a5f;border-radius:10px;overflow:hidden;">
+        <div id="rt-map-live-tooltip" style="position:absolute;top:10px;right:10px;max-width:255px;background:rgba(15,23,42,0.94);border:1px solid #38bdf8;border-radius:8px;padding:7px 9px;font-size:10px;line-height:1.4;color:#f8fafc;z-index:20;pointer-events:none;">
           ממתין למיקום ולתחנה מחוברת...
         </div>
       </div>
     `;
-    if (liveMain && liveMain.nextSibling) {
-      parent.insertBefore(sec, liveMain.nextSibling);
-    } else {
-      parent.appendChild(sec);
-    }
 
-    const ilTowers = [
-      { name: "אשדוד", lat: 31.8044, lon: 34.6553 },
-      { name: "תל אביב", lat: 32.0741, lon: 34.7922 },
-      { name: "ירושלים", lat: 31.7781, lon: 35.1984 },
-      { name: "חיפה", lat: 32.8012, lon: 34.9896 },
-      { name: "באר שבע", lat: 31.2518, lon: 34.7913 }
+    if (liveEl && liveEl.nextSibling) container.insertBefore(section, liveEl.nextSibling);
+    else container.appendChild(section);
+
+    const ilSites = [
+      { lat: 31.8044, lon: 34.6553 },
+      { lat: 32.0741, lon: 34.7922 },
+      { lat: 31.7781, lon: 35.1984 },
+      { lat: 32.8012, lon: 34.9896 },
+      { lat: 31.2518, lon: 34.7913 }
     ];
-    let posNow = { lat: 31.8044, lon: 34.6553 };
-    let followUser = true;
+    let currentPos = { lat: 31.8044, lon: 34.6553 };
+    let followCurrent = true;
 
-    function project(lat, lon, w, h) {
+    function toCanvasXY(lat, lon, w, h) {
       const x = ((lon - 34.2) / (35.9 - 34.2)) * (w - 32) + 16;
       const y = h - (((lat - 29.5) / (33.3 - 29.5)) * (h - 32) + 16);
       return { x: Math.max(12, Math.min(w - 12, x)), y: Math.max(12, Math.min(h - 12, y)) };
     }
 
-    window.rtRenderIsraelMap = function() {
-      const stage = document.getElementById("rt-il-map-stage");
-      const tip = document.getElementById("rt-il-map-tooltip");
-      if (!stage || !tip) return;
-      let svg = stage.querySelector("svg");
+    window.rtDrawIsraelMap = function() {
+      const vp = document.getElementById("rt-map-viewport");
+      const tip = document.getElementById("rt-map-live-tooltip");
+      if (!vp || !tip) return;
+      let svg = vp.querySelector("svg");
       if (!svg) {
         svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
         svg.setAttribute("width", "100%");
         svg.setAttribute("height", "100%");
-        stage.insertBefore(svg, tip);
+        vp.insertBefore(svg, tip);
       }
-      const w = stage.clientWidth || 340;
-      const h = stage.clientHeight || 320;
+      const w = vp.clientWidth || 340;
+      const h = vp.clientHeight || 330;
       svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
       while (svg.firstChild) svg.removeChild(svg.firstChild);
 
@@ -3065,145 +3073,154 @@ ${sampledRows.join('\n')}`;
       const rf = st.rf || {};
       const pci = sc.pci ?? sc.physicalCellId ?? "-";
       const cid = sc.eci ?? sc.nci ?? sc.cid ?? "-";
-      const band = cleanBandText(sc.band || sc.earfcn || "-");
+      const band = normalizeBandDisplay(sc.band || sc.earfcn || "-");
       const rsrp = rf.rsrp ?? sc.rsrp ?? "-";
       const sinr = rf.sinr ?? sc.sinr ?? "-";
 
-      const activeTower = ilTowers[0];
-      const uXY = followUser ? { x: w * 0.5, y: h * 0.62 } : project(posNow.lat, posNow.lon, w, h);
-      const tXY = project(activeTower.lat, activeTower.lon, w, h);
+      const uPt = followCurrent ? { x: w * 0.5, y: h * 0.62 } : toCanvasXY(currentPos.lat, currentPos.lon, w, h);
+      const tPt = toCanvasXY(ilSites[0].lat, ilSites[0].lon, w, h);
 
-      ilTowers.forEach(tw => {
-        const pt = followUser
-          ? { x: uXY.x + (tw.lon - posNow.lon) * 140, y: uXY.y - (tw.lat - posNow.lat) * 140 }
-          : project(tw.lat, tw.lon, w, h);
-        const c = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-        c.setAttribute("cx", String(pt.x));
-        c.setAttribute("cy", String(pt.y));
-        c.setAttribute("r", "5");
-        c.setAttribute("fill", "#38bdf8");
-        svg.appendChild(c);
+      ilSites.forEach(s => {
+        const pt = followCurrent
+          ? { x: uPt.x + (s.lon - currentPos.lon) * 140, y: uPt.y - (s.lat - currentPos.lat) * 140 }
+          : toCanvasXY(s.lat, s.lon, w, h);
+        const dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        dot.setAttribute("cx", String(pt.x));
+        dot.setAttribute("cy", String(pt.y));
+        dot.setAttribute("r", "5");
+        dot.setAttribute("fill", "#38bdf8");
+        svg.appendChild(dot);
       });
 
-      const link = document.createElementNS("http://www.w3.org/2000/svg", "line");
-      link.setAttribute("x1", String(uXY.x));
-      link.setAttribute("y1", String(uXY.y));
-      link.setAttribute("x2", String(tXY.x));
-      link.setAttribute("y2", String(tXY.y));
-      link.setAttribute("stroke", "#f97316");
-      link.setAttribute("stroke-width", "3.5");
-      svg.appendChild(link);
+      const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      line.setAttribute("x1", String(uPt.x));
+      line.setAttribute("y1", String(uPt.y));
+      line.setAttribute("x2", String(tPt.x));
+      line.setAttribute("y2", String(tPt.y));
+      line.setAttribute("stroke", "#f97316");
+      line.setAttribute("stroke-width", "3.5");
+      svg.appendChild(line);
 
       const uDot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-      uDot.setAttribute("cx", String(uXY.x));
-      uDot.setAttribute("cy", String(uXY.y));
+      uDot.setAttribute("cx", String(uPt.x));
+      uDot.setAttribute("cy", String(uPt.y));
       uDot.setAttribute("r", "7");
       uDot.setAttribute("fill", "#22c55e");
       uDot.setAttribute("stroke", "#ffffff");
       uDot.setAttribute("stroke-width", "2");
       svg.appendChild(uDot);
 
-      tip.style.top = `${Math.max(8, Math.min(h - 92, uXY.y - 74))}px`;
-      tip.style.left = `${Math.max(8, Math.min(w - 245, uXY.x - 105))}px`;
+      tip.style.top = `${Math.max(8, Math.min(h - 94, uPt.y - 76))}px`;
+      tip.style.left = `${Math.max(8, Math.min(w - 250, uPt.x - 108))}px`;
       tip.innerHTML = `
-        <div><strong>מיקום:</strong> <span dir="ltr">${posNow.lat.toFixed(4)}, ${posNow.lon.toFixed(4)}</span></div>
+        <div><strong>מיקום:</strong> <span dir="ltr">${currentPos.lat.toFixed(4)}, ${currentPos.lon.toFixed(4)}</span></div>
         <div><strong>תחנה מחוברת:</strong> PCI <span dir="ltr">${pci}</span> | ID <span dir="ltr">${cid}</span></div>
         <div><strong>תדר:</strong> <span dir="ltr">${band}</span></div>
         <div><strong>קליטה:</strong> <span dir="ltr">RSRP ${rsrp} dBm | SINR ${sinr} dB</span></div>
       `;
     };
 
-    document.getElementById("rt-recenter-map-btn").addEventListener("click", () => {
-      followUser = true;
+    document.getElementById("rt-map-center-btn").addEventListener("click", () => {
+      followCurrent = true;
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(p => {
-          posNow = { lat: p.coords.latitude, lon: p.coords.longitude };
-          window.rtRenderIsraelMap();
-        }, () => window.rtRenderIsraelMap(), { enableHighAccuracy: true, timeout: 4000 });
+          currentPos = { lat: p.coords.latitude, lon: p.coords.longitude };
+          window.rtDrawIsraelMap();
+        }, () => window.rtDrawIsraelMap(), { enableHighAccuracy: true, timeout: 4000 });
       } else {
-        window.rtRenderIsraelMap();
+        window.rtDrawIsraelMap();
       }
     });
   }
 
-  window.rtSwitchToMapTab = function() {
-    ensureMapSection();
-    document.querySelectorAll(".tab-view").forEach(v => { v.style.display = "none"; });
-    document.querySelectorAll(".tab-btn").forEach(b => {
-      b.classList.remove("bg-cyan-600", "text-white");
-      b.classList.add("text-slate-400");
-    });
-    const mapView = document.getElementById("view-map");
-    const mapBtn = document.getElementById("tab-btn-map");
-    if (mapView) mapView.style.display = "flex";
-    if (mapBtn) {
-      mapBtn.classList.remove("text-slate-400");
-      mapBtn.classList.add("bg-cyan-600", "text-white");
+  window.rtUnifiedSwitchTab = function(tabName) {
+    ensureMapTabSection();
+    if (tabName === "map") {
+      document.querySelectorAll(".tab-view").forEach(v => { v.style.display = "none"; });
+      document.querySelectorAll(".tab-btn").forEach(b => {
+        b.classList.remove("bg-cyan-600", "text-white");
+        b.classList.add("text-slate-400");
+      });
+      const mv = document.getElementById("view-map");
+      const mb = document.getElementById("tab-btn-map");
+      if (mv) mv.style.display = "flex";
+      if (mb) {
+        mb.classList.remove("text-slate-400");
+        mb.classList.add("bg-cyan-600", "text-white");
+      }
+      window.rtDrawIsraelMap();
+      return;
     }
-    window.rtRenderIsraelMap();
+    const mv = document.getElementById("view-map");
+    if (mv) mv.style.display = "none";
+    const mb = document.getElementById("tab-btn-map");
+    if (mb) {
+      mb.classList.remove("bg-cyan-600", "text-white");
+      mb.classList.add("text-slate-400");
+    }
+    if (typeof switchTab === "function") switchTab(tabName);
   };
 
-  function polishValuesUnitsAndChart() {
-    const bandEl = document.getElementById("cell-band");
-    if (bandEl && bandEl.textContent && bandEl.textContent.trim() !== "---") {
-      bandEl.textContent = cleanBandText(bandEl.textContent);
-    }
-    const bwEl = document.getElementById("cell-bw");
-    if (bwEl && bwEl.textContent && bwEl.textContent.trim() !== "---") {
-      bwEl.textContent = cleanBandText(bwEl.textContent);
-    }
+  function syncTelemetryLabelsAndChart() {
+    hideDuplicateFloatingControls();
+    ["cell-band", "cell-bw"].forEach(id => {
+      const el = document.getElementById(id);
+      if (el && el.textContent && el.textContent.trim() !== "---") {
+        const next = normalizeBandDisplay(el.textContent);
+        if (el.textContent !== next) el.textContent = next;
+      }
+    });
 
     document.querySelectorAll("span, div, small").forEach(el => {
-      if (el.children.length === 0 && !el.dataset.rtNoWrap) {
+      if (el.children.length === 0 && !el.dataset.rtInlineUnit) {
         const t = (el.textContent || "").trim();
         if (t === "dBm" || t === "dB") {
-          el.dataset.rtNoWrap = "1";
+          el.dataset.rtInlineUnit = "1";
           el.style.whiteSpace = "nowrap";
           el.style.display = "inline";
           el.style.marginRight = "3px";
-          if (el.parentElement) {
-            el.parentElement.style.whiteSpace = "nowrap";
-          }
+          if (el.parentElement) el.parentElement.style.whiteSpace = "nowrap";
         }
       }
     });
 
     const canvases = Array.from(document.querySelectorAll("canvas"));
-    const c = canvases.find(x => /signal|chart|live/i.test(x.id || "")) || canvases[0];
-    if (c && !c.dataset.rtChartReady) {
-      c.dataset.rtChartReady = "1";
-      const box = c.parentElement;
+    const chartCanvas = canvases.find(c => /signal|chart|live/i.test(c.id || "")) || canvases[0];
+    if (chartCanvas && !chartCanvas.dataset.rtChartEnhanced) {
+      chartCanvas.dataset.rtChartEnhanced = "1";
+      const box = chartCanvas.parentElement;
       if (box) {
         box.style.minHeight = "220px";
-        const ctrl = document.createElement("div");
-        ctrl.style.cssText = "display:flex;justify-content:space-between;align-items:center;font-size:10px;color:#94a3b8;margin-bottom:4px;";
-        ctrl.innerHTML = `
+        const bar = document.createElement("div");
+        bar.style.cssText = "display:flex;justify-content:space-between;align-items:center;gap:6px;font-size:10px;color:#94a3b8;margin-bottom:4px;";
+        bar.innerHTML = `
           <span>ציר Y: dBm/dB | ציר X: דגימות</span>
-          <button type="button" id="rt-chart-zoom-btn" style="background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:5px;padding:2px 8px;font-size:10px;cursor:pointer;">הגדל גרף</button>
+          <button type="button" id="rt-chart-size-toggle" style="background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:5px;padding:2px 8px;font-size:10px;cursor:pointer;">הגדל גרף</button>
         `;
-        box.insertBefore(ctrl, c);
-        document.getElementById("rt-chart-zoom-btn").addEventListener("click", function() {
-          const big = box.dataset.rtBig === "1";
-          box.dataset.rtBig = big ? "0" : "1";
-          box.style.height = big ? "" : "360px";
-          c.style.height = big ? "170px" : "300px";
-          this.textContent = big ? "הגדל גרף" : "צמצם גרף";
+        box.insertBefore(bar, chartCanvas);
+        document.getElementById("rt-chart-size-toggle").addEventListener("click", function() {
+          const isBig = box.dataset.rtExpanded === "1";
+          box.dataset.rtExpanded = isBig ? "0" : "1";
+          box.style.height = isBig ? "" : "360px";
+          chartCanvas.style.height = isBig ? "170px" : "300px";
+          this.textContent = isBig ? "הגדל גרף" : "צמצם גרף";
         });
       }
     }
-  }
 
-  function bootPolish() {
-    ensureMapSection();
-    polishValuesUnitsAndChart();
+    const mapSec = document.getElementById("view-map");
+    if (mapSec && mapSec.style.display !== "none" && typeof window.rtDrawIsraelMap === "function") {
+      window.rtDrawIsraelMap();
+    }
   }
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", bootPolish);
+    document.addEventListener("DOMContentLoaded", () => { ensureMapTabSection(); syncTelemetryLabelsAndChart(); });
   } else {
-    bootPolish();
+    ensureMapTabSection();
+    syncTelemetryLabelsAndChart();
   }
-  setInterval(polishValuesUnitsAndChart, 2500);
+  setInterval(syncTelemetryLabelsAndChart, 2500);
 })();
 </script>
 
