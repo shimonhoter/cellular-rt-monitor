@@ -1937,6 +1937,498 @@ ${sampledRows.join('\n')}`;
     setInterval(bindClearButtons, 2000);
   })();
 
+
+  (function() {
+    if (window.__rtFullUiUxV41Installed) return;
+    window.__rtFullUiUxV41Installed = true;
+
+    const styleEl = document.createElement("style");
+    styleEl.id = "rt-full-ui-ux-v41-style";
+    styleEl.textContent = `
+      #rt-floating-exit-btn, .rt-floating-exit, [data-floating-exit="true"] {
+        display: none !important;
+      }
+      .rt-top-action-bar {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        gap: 8px !important;
+        flex-wrap: wrap !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+      }
+      .rt-top-left-controls {
+        display: flex !important;
+        align-items: center !important;
+        gap: 8px !important;
+      }
+      #rt-explicit-exit-btn {
+        position: static !important;
+        padding: 6px 12px !important;
+        border-radius: 8px !important;
+        background: #b91c1c !important;
+        color: #ffffff !important;
+        font-weight: 700 !important;
+        font-size: 12px !important;
+        border: 1px solid #f87171 !important;
+        cursor: pointer !important;
+        flex-shrink: 0 !important;
+      }
+      #rt-help-menu-btn {
+        position: static !important;
+        padding: 6px 12px !important;
+        border-radius: 8px !important;
+        background: #1e3a8a !important;
+        color: #eff6ff !important;
+        font-weight: 700 !important;
+        font-size: 12px !important;
+        border: 1px solid #60a5fa !important;
+        cursor: pointer !important;
+        flex-shrink: 0 !important;
+      }
+      #rt-help-drawer-modal {
+        position: fixed !important;
+        inset: 0 !important;
+        background: rgba(2, 6, 23, 0.82) !important;
+        z-index: 99990 !important;
+        display: none;
+        align-items: center !important;
+        justify-content: center !important;
+        padding: 16px !important;
+      }
+      #rt-help-drawer-modal.open {
+        display: flex !important;
+      }
+      .rt-help-card {
+        width: 100%;
+        max-width: 420px;
+        background: #0f172a;
+        color: #f8fafc;
+        border: 1px solid #334155;
+        border-radius: 14px;
+        padding: 16px;
+        box-shadow: 0 18px 40px rgba(0,0,0,0.65);
+        text-align: right;
+      }
+      .rt-inline-unit {
+        display: inline !important;
+        white-space: nowrap !important;
+        margin-right: 4px !important;
+        font-size: 0.72em !important;
+        opacity: 0.9 !important;
+      }
+      .rt-metric-inline-row {
+        display: inline-flex !important;
+        align-items: baseline !important;
+        gap: 4px !important;
+        white-space: nowrap !important;
+      }
+      .rt-chart-shell {
+        width: 100% !important;
+        box-sizing: border-box !important;
+        transition: height 0.2s ease !important;
+      }
+      .rt-chart-shell.expanded {
+        min-height: 360px !important;
+      }
+      #rt-map-tab-btn {
+        white-space: nowrap !important;
+      }
+      #rt-map-panel {
+        display: none;
+        background: #0f172a;
+        border: 1px solid #1e293b;
+        border-radius: 12px;
+        padding: 12px;
+        margin: 10px 0;
+        color: #e2e8f0;
+      }
+      #rt-map-panel.active {
+        display: block;
+      }
+      #rt-map-canvas {
+        width: 100%;
+        height: 320px;
+        border-radius: 10px;
+        background: #061021;
+        border: 1px solid #1e3a5f;
+        position: relative;
+        overflow: hidden;
+      }
+      #rt-map-follow-tooltip {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        max-width: 270px;
+        background: rgba(15, 23, 42, 0.94);
+        border: 1px solid #38bdf8;
+        border-radius: 8px;
+        padding: 8px 10px;
+        font-size: 11px;
+        line-height: 1.45;
+        color: #f1f5f9;
+        z-index: 20;
+        pointer-events: none;
+      }
+    `;
+    document.head.appendChild(styleEl);
+
+    const IL_BAND_RANGES = {
+      "B1": "2100 MHz (1920-1980 / 2110-2170 MHz)",
+      "B3": "1800 MHz (1710-1785 / 1805-1880 MHz)",
+      "B7": "2600 MHz (2500-2570 / 2620-2690 MHz)",
+      "B8": "900 MHz (880-915 / 925-960 MHz)",
+      "B20": "800 MHz (832-862 / 791-821 MHz)",
+      "B28": "700 MHz (703-748 / 758-803 MHz)",
+      "n28": "700 MHz NR (703-748 / 758-803 MHz)",
+      "n78": "3500 MHz NR (3300-3800 MHz)"
+    };
+
+    function cleanBandString(raw) {
+      if (!raw) return "";
+      const m = String(raw).match(/(n?\d{1,3})/i);
+      const code = m ? (m[1].toLowerCase().startsWith("n") && !/^\d/.test(m[1]) ? "n" + m[1].slice(1) : (raw.toLowerCase().includes("nr") ? "n" + m[1] : "B" + m[1])) : String(raw).trim();
+      const range = IL_BAND_RANGES[code] || IL_BAND_RANGES[code.toUpperCase()];
+      return range ? `${code} (${range})` : String(raw).replace(/\)\)+/g, ")").replace(/\(\(+/g, "(").trim();
+    }
+
+    function normalizeBandAndUnits() {
+      const bandNodes = Array.from(document.querySelectorAll("*")).filter(el => {
+        if (el.children.length > 0) return false;
+        const t = (el.textContent || "").trim();
+        return /^B\d{1,2}\s*\(|^n\d{1,3}\s*\(/i.test(t) && t.includes("MHz");
+      });
+      bandNodes.forEach(el => {
+        const cleaned = cleanBandString(el.textContent);
+        if (cleaned && el.textContent !== cleaned) {
+          el.textContent = cleaned;
+        }
+      });
+
+      const unitCandidates = Array.from(document.querySelectorAll("span, div, small, label"));
+      unitCandidates.forEach(el => {
+        if (el.children.length > 0 || el.dataset.rtUnitNormalized === "1") return;
+        const txt = (el.textContent || "").trim();
+        if (txt === "dBm" || txt === "dB") {
+          el.dataset.rtUnitNormalized = "1";
+          el.classList.add("rt-inline-unit");
+          const parent = el.parentElement;
+          if (parent) {
+            parent.style.display = "inline-flex";
+            parent.style.alignItems = "baseline";
+            parent.style.flexWrap = "nowrap";
+            parent.style.gap = "4px";
+          }
+        }
+      });
+    }
+
+    function setupTopBarHelpAndExit() {
+      Array.from(document.querySelectorAll("button, a, div, span")).forEach(el => {
+        const t = (el.textContent || "").trim();
+        if (t === "4636" && el.children.length === 0 && !el.closest("#rt-help-drawer-modal")) {
+          el.style.display = "none";
+        }
+      });
+
+      const exitBtn = document.getElementById("rt-explicit-exit-btn");
+      const headerRoot =
+        (exitBtn && exitBtn.closest("header, nav, .header, .top-bar")) ||
+        document.querySelector("header, nav, .header, .top-bar") ||
+        document.body.firstElementChild;
+
+      let leftGroup = document.getElementById("rt-top-left-controls");
+      if (!leftGroup) {
+        leftGroup = document.createElement("div");
+        leftGroup.id = "rt-top-left-controls";
+        leftGroup.className = "rt-top-left-controls";
+      }
+
+      if (exitBtn && exitBtn.parentElement !== leftGroup) {
+        leftGroup.appendChild(exitBtn);
+      }
+
+      let helpBtn = document.getElementById("rt-help-menu-btn");
+      if (!helpBtn) {
+        helpBtn = document.createElement("button");
+        helpBtn.id = "rt-help-menu-btn";
+        helpBtn.type = "button";
+        helpBtn.textContent = "עזרה ?";
+        leftGroup.appendChild(helpBtn);
+      } else if (helpBtn.parentElement !== leftGroup) {
+        leftGroup.appendChild(helpBtn);
+      }
+
+      if (headerRoot && leftGroup.parentElement !== headerRoot) {
+        headerRoot.classList.add("rt-top-action-bar");
+        headerRoot.insertBefore(leftGroup, headerRoot.firstChild);
+      }
+
+      if (!document.getElementById("rt-help-drawer-modal")) {
+        const modal = document.createElement("div");
+        modal.id = "rt-help-drawer-modal";
+        modal.innerHTML = `
+          <div class="rt-help-card">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+              <strong style="font-size:15px;">עזרה וכלים מתקדמים</strong>
+              <button id="rt-help-close-btn" type="button" style="background:#334155;color:#fff;border:none;border-radius:6px;padding:4px 10px;cursor:pointer;">סגור</button>
+            </div>
+            <p style="font-size:12px;color:#cbd5e1;margin:0 0 12px 0;">
+              אבחון מודם ותפריט שירות (*#*#4636#*#*) מרוכזים כאן במקום בשורת הכותרות הראשית.
+            </p>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button id="rt-help-tech-4636-btn" type="button" style="background:#0284c7;color:#fff;border:none;border-radius:8px;padding:8px 12px;font-weight:700;cursor:pointer;">
+                טכנאי / חיוג 4636
+              </button>
+              <button id="rt-help-shizuku-btn" type="button" style="background:#334155;color:#fff;border:none;border-radius:8px;padding:8px 12px;font-weight:600;cursor:pointer;">
+                הגדרות Shizuku
+              </button>
+            </div>
+          </div>
+        `;
+        document.body.appendChild(modal);
+
+        helpBtn.addEventListener("click", () => modal.classList.add("open"));
+        modal.addEventListener("click", (e) => {
+          if (e.target === modal) modal.classList.remove("open");
+        });
+        document.getElementById("rt-help-close-btn").addEventListener("click", () => modal.classList.remove("open"));
+        document.getElementById("rt-help-tech-4636-btn").addEventListener("click", () => {
+          try { if (typeof addLog === "function") addLog("SYS", "HELP", "הפעלת כלי טכנאי 4636 מתפריט העזרה"); } catch (_e) {}
+          if (window.AndroidModem && typeof window.AndroidModem.dialTechnicianCode === "function") {
+            window.AndroidModem.dialTechnicianCode("*#*#4636#*#*");
+          } else {
+            window.location.href = "tel:*%23*%234636%23*%23*";
+          }
+        });
+        document.getElementById("rt-help-shizuku-btn").addEventListener("click", () => {
+          if (window.AndroidModem && typeof window.AndroidModem.openShizukuApp === "function") {
+            window.AndroidModem.openShizukuApp();
+          }
+        });
+      }
+    }
+
+    function enhanceChartAndAxes() {
+      const canvases = Array.from(document.querySelectorAll("canvas"));
+      const mainCanvas = canvases.find(c => (c.id || "").toLowerCase().includes("signal") || (c.id || "").toLowerCase().includes("chart") || (c.id || "").toLowerCase().includes("live")) || canvases[0];
+      if (!mainCanvas || mainCanvas.dataset.rtChartEnhanced === "1") return;
+      mainCanvas.dataset.rtChartEnhanced = "1";
+
+      const parent = mainCanvas.parentElement;
+      if (!parent) return;
+      parent.classList.add("rt-chart-shell");
+      parent.style.minHeight = "240px";
+
+      const toolbar = document.createElement("div");
+      toolbar.style.cssText = "display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;font-size:11px;color:#94a3b8;";
+      toolbar.innerHTML = `
+        <span>ציר Y: עוצמה/איכות (dBm/dB) | ציר X: דגימות אחרונות</span>
+        <button id="rt-toggle-chart-size-btn" type="button" style="background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;padding:3px 9px;font-size:11px;cursor:pointer;">
+          הגדל גרף
+        </button>
+      `;
+      parent.insertBefore(toolbar, mainCanvas);
+
+      const resizeBtn = document.getElementById("rt-toggle-chart-size-btn");
+      resizeBtn.addEventListener("click", () => {
+        const expanded = parent.classList.toggle("expanded");
+        if (expanded) {
+          parent.style.height = "380px";
+          mainCanvas.style.height = "310px";
+          resizeBtn.textContent = "צמצם גרף";
+        } else {
+          parent.style.height = "";
+          mainCanvas.style.height = "190px";
+          resizeBtn.textContent = "הגדל גרף";
+        }
+        mainCanvas.width = mainCanvas.clientWidth || 320;
+        mainCanvas.height = mainCanvas.clientHeight || 200;
+      });
+    }
+
+    function setupIsraelBaseStationsMapTab() {
+      if (document.getElementById("rt-map-tab-btn")) return;
+
+      const sampleSites = [
+        { name: "אשדוד מרכז", lat: 31.8044, lon: 34.6553, band: "B3/B7" },
+        { name: "תל אביב עזריאלי", lat: 32.0741, lon: 34.7922, band: "B3/n78" },
+        { name: "ירושלים גבעת רם", lat: 31.7781, lon: 35.1984, band: "B3/B20" },
+        { name: "חיפה כרמל", lat: 32.8012, lon: 34.9896, band: "B3/B7" },
+        { name: "באר שבע הנגב", lat: 31.2518, lon: 34.7913, band: "B3/B20" }
+      ];
+
+      const navContainer =
+        document.querySelector("nav, .tabs, .nav-tabs, [role='tablist']") ||
+        document.body.firstElementChild;
+
+      const mapTabBtn = document.createElement("button");
+      mapTabBtn.id = "rt-map-tab-btn";
+      mapTabBtn.type = "button";
+      mapTabBtn.textContent = "מפה";
+      mapTabBtn.style.cssText = "padding:6px 12px;border-radius:8px;background:#0f766e;color:#f0fdfa;font-weight:700;font-size:12px;border:1px solid #2dd4bf;cursor:pointer;";
+
+      if (navContainer) {
+        navContainer.appendChild(mapTabBtn);
+      }
+
+      const panel = document.createElement("div");
+      panel.id = "rt-map-panel";
+      panel.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
+          <strong style="font-size:13px;">מפת תחנות בסיס בישראל ומיקום חי</strong>
+          <button id="rt-center-user-map-btn" type="button" style="background:#2563eb;color:#fff;border:none;border-radius:7px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;">
+            מרכז למיקומי הנוכחי
+          </button>
+        </div>
+        <div id="rt-map-canvas">
+          <div id="rt-map-follow-tooltip">ממתין למיקום ונתוני תחנה מחוברת...</div>
+        </div>
+      `;
+
+      const anchorSection = document.querySelector("main, .main-content, #app") || document.body;
+      anchorSection.insertBefore(panel, anchorSection.firstChild);
+
+      let userCoords = { lat: 31.8044, lon: 34.6553 };
+      let centerOnUser = true;
+
+      function updateUserGps() {
+        if (!navigator.geolocation) return;
+        navigator.geolocation.getCurrentPosition(
+          pos => {
+            userCoords = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+            drawMap();
+          },
+          () => {},
+          { enableHighAccuracy: true, maximumAge: 5000, timeout: 4000 }
+        );
+      }
+
+      function latLonToXY(lat, lon, w, h) {
+        const minLat = 29.5, maxLat = 33.3;
+        const minLon = 34.2, maxLon = 35.9;
+        const x = ((lon - minLon) / (maxLon - minLon)) * (w - 40) + 20;
+        const y = h - (((lat - minLat) / (maxLat - minLat)) * (h - 40) + 20);
+        return { x: Math.max(14, Math.min(w - 14, x)), y: Math.max(14, Math.min(h - 14, y)) };
+      }
+
+      function drawMap() {
+        const canvasDiv = document.getElementById("rt-map-canvas");
+        const tooltip = document.getElementById("rt-map-follow-tooltip");
+        if (!canvasDiv || !tooltip) return;
+
+        let svg = canvasDiv.querySelector("svg");
+        if (!svg) {
+          svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+          svg.setAttribute("width", "100%");
+          svg.setAttribute("height", "100%");
+          svg.style.display = "block";
+          canvasDiv.insertBefore(svg, tooltip);
+        }
+
+        const w = canvasDiv.clientWidth || 340;
+        const h = canvasDiv.clientHeight || 320;
+        svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+        while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+        const st = window.state || {};
+        const sc = st.servingCell || {};
+        const rf = st.rf || {};
+        const pci = sc.pci ?? sc.physicalCellId ?? "-";
+        const cellId = sc.eci ?? sc.nci ?? sc.cid ?? "-";
+        const band = cleanBandString(sc.band || sc.earfcn || "-");
+        const rsrp = rf.rsrp ?? sc.rsrp ?? "-";
+        const sinr = rf.sinr ?? sc.sinr ?? "-";
+
+        const activeSite = sampleSites[0];
+        const uPt = centerOnUser
+          ? { x: w * 0.5, y: h * 0.62 }
+          : latLonToXY(userCoords.lat, userCoords.lon, w, h);
+        const sPt = latLonToXY(activeSite.lat, activeSite.lon, w, h);
+
+        sampleSites.forEach(site => {
+          const pt = centerOnUser
+            ? {
+                x: uPt.x + (site.lon - userCoords.lon) * 140,
+                y: uPt.y - (site.lat - userCoords.lat) * 140
+              }
+            : latLonToXY(site.lat, site.lon, w, h);
+          const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+          circle.setAttribute("cx", String(pt.x));
+          circle.setAttribute("cy", String(pt.y));
+          circle.setAttribute("r", "5");
+          circle.setAttribute("fill", "#38bdf8");
+          svg.appendChild(circle);
+        });
+
+        const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        line.setAttribute("x1", String(uPt.x));
+        line.setAttribute("y1", String(uPt.y));
+        line.setAttribute("x2", String(sPt.x));
+        line.setAttribute("y2", String(sPt.y));
+        line.setAttribute("stroke", "#f97316");
+        line.setAttribute("stroke-width", "3.5");
+        line.setAttribute("stroke-dasharray", "6,3");
+        svg.appendChild(line);
+
+        const userDot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        userDot.setAttribute("cx", String(uPt.x));
+        userDot.setAttribute("cy", String(uPt.y));
+        userDot.setAttribute("r", "7");
+        userDot.setAttribute("fill", "#22c55e");
+        userDot.setAttribute("stroke", "#ffffff");
+        userDot.setAttribute("stroke-width", "2");
+        svg.appendChild(userDot);
+
+        tooltip.style.top = `${Math.max(8, Math.min(h - 95, uPt.y - 76))}px`;
+        tooltip.style.left = `${Math.max(8, Math.min(w - 250, uPt.x - 110))}px`;
+        tooltip.innerHTML = `
+          <div><strong>מיקום נוכחי:</strong> ${userCoords.lat.toFixed(4)}, ${userCoords.lon.toFixed(4)}</div>
+          <div><strong>תחנה מחוברת:</strong> PCI ${pci} | ID ${cellId}</div>
+          <div><strong>תדר/רשת:</strong> ${band}</div>
+          <div><strong>קליטה:</strong> RSRP ${rsrp} dBm | SINR ${sinr} dB</div>
+        `;
+      }
+
+      mapTabBtn.addEventListener("click", () => {
+        const isActive = panel.classList.toggle("active");
+        if (isActive) {
+          updateUserGps();
+          drawMap();
+        }
+      });
+
+      document.getElementById("rt-center-user-map-btn").addEventListener("click", () => {
+        centerOnUser = true;
+        updateUserGps();
+        drawMap();
+      });
+
+      setInterval(() => {
+        if (panel.classList.contains("active")) {
+          drawMap();
+        }
+      }, 2000);
+    }
+
+    function runAllUiEnhancements() {
+      setupTopBarHelpAndExit();
+      normalizeBandAndUnits();
+      enhanceChartAndAxes();
+      setupIsraelBaseStationsMapTab();
+    }
+
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", runAllUiEnhancements);
+    } else {
+      runAllUiEnhancements();
+    }
+    setInterval(() => {
+      normalizeBandAndUnits();
+      setupTopBarHelpAndExit();
+    }, 2500);
+  })();
+
 </script>
 </body>
 </html>

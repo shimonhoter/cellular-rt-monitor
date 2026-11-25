@@ -271,6 +271,25 @@ class MainActivity : AppCompatActivity() {
             }
         }
         @JavascriptInterface
+        fun dialTechnicianCode(code: String = "*#*#4636#*#*") {
+            runOnUiThread {
+                try {
+                    val encoded = android.net.Uri.encode(code)
+                    val intent = Intent(Intent.ACTION_DIAL, android.net.Uri.parse("tel:$encoded")).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    startActivity(intent)
+                } catch (_: Exception) {
+                    try {
+                        startActivity(Intent(Settings.ACTION_DEVICE_INFO_SETTINGS).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        })
+                    } catch (_: Exception) {}
+                }
+            }
+        }
+
+        @JavascriptInterface
         fun openShizukuApp() {
             val launchIntent = packageManager.getLaunchIntentForPackage("moe.shizuku.privileged.api")
             if (launchIntent != null) {
