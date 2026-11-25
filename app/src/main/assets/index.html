@@ -2429,6 +2429,495 @@ ${sampledRows.join('\n')}`;
     }, 2500);
   })();
 
+
+  (function() {
+    if (window.__rtIsoStandardLayoutInstalled) return;
+    window.__rtIsoStandardLayoutInstalled = true;
+
+    const style = document.createElement("style");
+    style.id = "rt-iso-standard-layout-style";
+    style.textContent = `
+      #rt-floating-exit-btn, .rt-floating-exit, [data-floating-exit="true"],
+      #rt-exit-action-strip {
+        display: none !important;
+      }
+      .rt-iso-topbar {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        gap: 8px !important;
+        flex-wrap: wrap !important;
+        padding: 8px 10px !important;
+        min-height: 44px !important;
+        box-sizing: border-box !important;
+      }
+      .rt-iso-left-actions {
+        display: flex !important;
+        align-items: center !important;
+        gap: 8px !important;
+        flex-shrink: 0 !important;
+      }
+      #rt-explicit-exit-btn {
+        position: static !important;
+        min-height: 40px !important;
+        padding: 6px 12px !important;
+        border-radius: 8px !important;
+        background: #b91c1c !important;
+        color: #ffffff !important;
+        border: 1px solid #f87171 !important;
+        font-weight: 700 !important;
+        font-size: 12px !important;
+        cursor: pointer !important;
+      }
+      #rt-help-menu-btn {
+        position: static !important;
+        min-height: 40px !important;
+        padding: 6px 12px !important;
+        border-radius: 8px !important;
+        background: #1e3a8a !important;
+        color: #eff6ff !important;
+        border: 1px solid #60a5fa !important;
+        font-weight: 700 !important;
+        font-size: 12px !important;
+        cursor: pointer !important;
+      }
+      #rt-help-drawer-modal {
+        position: fixed !important;
+        inset: 0 !important;
+        background: rgba(2, 6, 23, 0.84) !important;
+        z-index: 99995 !important;
+        display: none;
+        align-items: center !important;
+        justify-content: center !important;
+        padding: 16px !important;
+      }
+      #rt-help-drawer-modal.open {
+        display: flex !important;
+      }
+      .rt-help-drawer-card {
+        width: 100%;
+        max-width: 420px;
+        background: #0f172a;
+        color: #f8fafc;
+        border: 1px solid #334155;
+        border-radius: 14px;
+        padding: 16px;
+        text-align: right;
+      }
+      .rt-ltr-num {
+        direction: ltr !important;
+        unicode-bidi: isolate !important;
+        font-variant-numeric: tabular-nums !important;
+        white-space: nowrap !important;
+      }
+      .rt-unit-inline {
+        display: inline !important;
+        white-space: nowrap !important;
+        direction: ltr !important;
+        unicode-bidi: isolate !important;
+        font-size: 0.75em !important;
+        margin-right: 4px !important;
+      }
+      .rt-tabs-row {
+        display: flex !important;
+        align-items: center !important;
+        gap: 6px !important;
+        overflow-x: auto !important;
+        padding: 6px 8px !important;
+      }
+      #rt-map-tab-btn {
+        min-height: 40px !important;
+        padding: 6px 12px !important;
+        border-radius: 8px !important;
+        background: #0f766e !important;
+        color: #f0fdfa !important;
+        border: 1px solid #2dd4bf !important;
+        font-weight: 700 !important;
+        font-size: 12px !important;
+        white-space: nowrap !important;
+        cursor: pointer !important;
+      }
+      #rt-map-panel {
+        display: none;
+        background: #0f172a;
+        border: 1px solid #1e293b;
+        border-radius: 12px;
+        padding: 12px;
+        margin: 8px 0;
+        color: #f1f5f9;
+      }
+      #rt-map-panel.active {
+        display: block;
+      }
+      #rt-map-canvas {
+        width: 100%;
+        height: 320px;
+        position: relative;
+        overflow: hidden;
+        border-radius: 10px;
+        background: #061021;
+        border: 1px solid #1e3a5f;
+      }
+      #rt-map-follow-tooltip {
+        position: absolute;
+        max-width: 260px;
+        background: rgba(15, 23, 42, 0.94);
+        border: 1px solid #38bdf8;
+        border-radius: 8px;
+        padding: 8px 10px;
+        font-size: 11px;
+        line-height: 1.45;
+        color: #f8fafc;
+        pointer-events: none;
+        z-index: 25;
+      }
+      .rt-chart-box {
+        width: 100% !important;
+        min-height: 240px !important;
+        box-sizing: border-box !important;
+      }
+      .rt-chart-box.expanded {
+        min-height: 380px !important;
+      }
+    `;
+    document.head.appendChild(style);
+
+    const BAND_MAP_IL = {
+      "B1": "2100 MHz (1920-1980 / 2110-2170 MHz)",
+      "B3": "1800 MHz (1710-1785 / 1805-1880 MHz)",
+      "B7": "2600 MHz (2500-2570 / 2620-2690 MHz)",
+      "B8": "900 MHz (880-915 / 925-960 MHz)",
+      "B20": "800 MHz (832-862 / 791-821 MHz)",
+      "B28": "700 MHz (703-748 / 758-803 MHz)",
+      "n28": "700 MHz NR (703-748 / 758-803 MHz)",
+      "n78": "3500 MHz NR (3300-3800 MHz)"
+    };
+
+    function formatBandClean(val) {
+      if (!val) return "";
+      const s = String(val).replace(/\)\)+/g, ")").replace(/\(\(+/g, "(").trim();
+      const m = s.match(/(n?\d{1,3})/i);
+      if (!m) return s;
+      const key = (s.toLowerCase().includes("nr") && !m[1].toLowerCase().startsWith("n")) ? "n" + m[1] : m[1];
+      const norm = key.length > 1 && key[0].toLowerCase() === "b" ? "B" + key.slice(1) : key;
+      const range = BAND_MAP_IL[norm] || BAND_MAP_IL[norm.toUpperCase()];
+      return range ? `${norm} (${range})` : s;
+    }
+
+    function applyIsoTopbarAndHelp() {
+      Array.from(document.querySelectorAll("button, a, div, span")).forEach(el => {
+        if (el.children.length === 0 && (el.textContent || "").trim() === "4636" && !el.closest("#rt-help-drawer-modal")) {
+          el.style.display = "none";
+        }
+      });
+
+      const exitBtn = document.getElementById("rt-explicit-exit-btn");
+      const headerEl =
+        (exitBtn && exitBtn.closest("header, nav, .header, .top-bar")) ||
+        document.querySelector("header, nav, .header, .top-bar") ||
+        document.body.firstElementChild;
+
+      let leftGroup = document.getElementById("rt-iso-left-actions");
+      if (!leftGroup) {
+        leftGroup = document.createElement("div");
+        leftGroup.id = "rt-iso-left-actions";
+        leftGroup.className = "rt-iso-left-actions";
+      }
+      if (exitBtn && exitBtn.parentElement !== leftGroup) {
+        leftGroup.appendChild(exitBtn);
+      }
+
+      let helpBtn = document.getElementById("rt-help-menu-btn");
+      if (!helpBtn) {
+        helpBtn = document.createElement("button");
+        helpBtn.id = "rt-help-menu-btn";
+        helpBtn.type = "button";
+        helpBtn.textContent = "עזרה ?";
+        leftGroup.appendChild(helpBtn);
+      } else if (helpBtn.parentElement !== leftGroup) {
+        leftGroup.appendChild(helpBtn);
+      }
+
+      if (headerEl && leftGroup.parentElement !== headerEl) {
+        headerEl.classList.add("rt-iso-topbar");
+        headerEl.insertBefore(leftGroup, headerEl.firstChild);
+      }
+
+      if (!document.getElementById("rt-help-drawer-modal")) {
+        const modal = document.createElement("div");
+        modal.id = "rt-help-drawer-modal";
+        modal.innerHTML = `
+          <div class="rt-help-drawer-card">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+              <strong>עזרה ואפשרויות טכנאי</strong>
+              <button id="rt-help-modal-close" type="button" style="background:#334155;color:#fff;border:none;border-radius:6px;padding:4px 10px;cursor:pointer;">סגור</button>
+            </div>
+            <p style="font-size:12px;color:#cbd5e1;margin:0 0 12px 0;">
+              תפריט שירות ואבחון מתקדם (4636) מרוכז בתוך העזרה לשמירה על שורת כותרת נקייה.
+            </p>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button id="rt-help-4636-action" type="button" style="background:#0284c7;color:#fff;border:none;border-radius:8px;padding:8px 12px;font-weight:700;cursor:pointer;">
+                טכנאי / חיוג 4636
+              </button>
+              <button id="rt-help-shizuku-action" type="button" style="background:#334155;color:#fff;border:none;border-radius:8px;padding:8px 12px;font-weight:600;cursor:pointer;">
+                פתיחת Shizuku
+              </button>
+            </div>
+          </div>
+        `;
+        document.body.appendChild(modal);
+
+        helpBtn.addEventListener("click", () => modal.classList.add("open"));
+        modal.addEventListener("click", e => {
+          if (e.target === modal) modal.classList.remove("open");
+        });
+        document.getElementById("rt-help-modal-close").addEventListener("click", () => modal.classList.remove("open"));
+        document.getElementById("rt-help-4636-action").addEventListener("click", () => {
+          try { if (typeof addLog === "function") addLog("SYS", "HELP", "הפעלת כלי טכנאי 4636 מתוך תפריט העזרה"); } catch (_e) {}
+          if (window.AndroidModem && typeof window.AndroidModem.dialTechnicianCode === "function") {
+            window.AndroidModem.dialTechnicianCode("*#*#4636#*#*");
+          }
+        });
+        document.getElementById("rt-help-shizuku-action").addEventListener("click", () => {
+          if (window.AndroidModem && typeof window.AndroidModem.openShizukuApp === "function") {
+            window.AndroidModem.openShizukuApp();
+          }
+        });
+      }
+    }
+
+    function normalizeBandsAndInlineUnits() {
+      const nodes = Array.from(document.querySelectorAll("*")).filter(el => {
+        if (el.children.length > 0) return false;
+        const t = (el.textContent || "").trim();
+        return /^B\d{1,2}\s*\(|^n\d{1,3}\s*\(/i.test(t) && t.includes("MHz");
+      });
+      nodes.forEach(el => {
+        const cleaned = formatBandClean(el.textContent);
+        if (cleaned && el.textContent !== cleaned) el.textContent = cleaned;
+      });
+
+      const unitEls = Array.from(document.querySelectorAll("span, div, small, label")).filter(el => {
+        if (el.children.length > 0 || el.dataset.rtUnitDone === "1") return false;
+        const txt = (el.textContent || "").trim();
+        return txt === "dBm" || txt === "dB";
+      });
+      unitEls.forEach(el => {
+        el.dataset.rtUnitDone = "1";
+        el.classList.add("rt-unit-inline");
+        if (el.parentElement) {
+          el.parentElement.style.display = "inline-flex";
+          el.parentElement.style.alignItems = "baseline";
+          el.parentElement.style.flexWrap = "nowrap";
+          el.parentElement.style.gap = "4px";
+        }
+      });
+    }
+
+    function enhanceChartAxesAndToggle() {
+      const canvases = Array.from(document.querySelectorAll("canvas"));
+      const target = canvases.find(c => /signal|chart|live/i.test(c.id || "")) || canvases[0];
+      if (!target || target.dataset.rtChartDone === "1") return;
+      target.dataset.rtChartDone = "1";
+
+      const box = target.parentElement;
+      if (!box) return;
+      box.classList.add("rt-chart-box");
+
+      const bar = document.createElement("div");
+      bar.style.cssText = "display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;font-size:11px;color:#94a3b8;";
+      bar.innerHTML = `
+        <span>ציר Y: dBm / dB | ציר X: דגימות / זמן</span>
+        <button id="rt-chart-expand-toggle" type="button" style="background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;">
+          הגדל גרף
+        </button>
+      `;
+      box.insertBefore(bar, target);
+
+      const btn = document.getElementById("rt-chart-expand-toggle");
+      btn.addEventListener("click", () => {
+        const exp = box.classList.toggle("expanded");
+        if (exp) {
+          box.style.height = "380px";
+          target.style.height = "315px";
+          btn.textContent = "צמצם גרף";
+        } else {
+          box.style.height = "";
+          target.style.height = "195px";
+          btn.textContent = "הגדל גרף";
+        }
+        target.width = target.clientWidth || 320;
+        target.height = target.clientHeight || 200;
+      });
+    }
+
+    function setupIsraelMapTab() {
+      if (document.getElementById("rt-map-tab-btn")) return;
+
+      const sites = [
+        { name: "אשדוד מרכז", lat: 31.8044, lon: 34.6553 },
+        { name: "תל אביב עזריאלי", lat: 32.0741, lon: 34.7922 },
+        { name: "ירושלים קריית הלאום", lat: 31.7781, lon: 35.1984 },
+        { name: "חיפה מרכז הכרמל", lat: 32.8012, lon: 34.9896 },
+        { name: "באר שבע צפון", lat: 31.2518, lon: 34.7913 }
+      ];
+
+      const tabsHost = document.querySelector("nav, .tabs, .nav-tabs, [role='tablist']") || document.body.firstElementChild;
+      const mapBtn = document.createElement("button");
+      mapBtn.id = "rt-map-tab-btn";
+      mapBtn.type = "button";
+      mapBtn.textContent = "מפה";
+      if (tabsHost) {
+        tabsHost.classList.add("rt-tabs-row");
+        tabsHost.appendChild(mapBtn);
+      }
+
+      const panel = document.createElement("div");
+      panel.id = "rt-map-panel";
+      panel.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
+          <strong style="font-size:13px;">מפת תחנות בסיס בישראל ומיקום חי</strong>
+          <button id="rt-map-center-btn" type="button" style="background:#2563eb;color:#fff;border:none;border-radius:7px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer;">
+            מרכז למיקומי הנוכחי
+          </button>
+        </div>
+        <div id="rt-map-canvas">
+          <div id="rt-map-follow-tooltip">ממתין למיקום ונתוני תחנה מחוברת...</div>
+        </div>
+      `;
+
+      const mainHost = document.querySelector("main, .main-content, #app") || document.body;
+      mainHost.insertBefore(panel, mainHost.firstChild);
+
+      let coords = { lat: 31.8044, lon: 34.6553 };
+      let followMe = true;
+
+      function pollLocation() {
+        if (!navigator.geolocation) return;
+        navigator.geolocation.getCurrentPosition(
+          p => {
+            coords = { lat: p.coords.latitude, lon: p.coords.longitude };
+            renderMap();
+          },
+          () => {},
+          { enableHighAccuracy: true, maximumAge: 5000, timeout: 4000 }
+        );
+      }
+
+      function proj(lat, lon, w, h) {
+        const x = ((lon - 34.2) / (35.9 - 34.2)) * (w - 36) + 18;
+        const y = h - (((lat - 29.5) / (33.3 - 29.5)) * (h - 36) + 18);
+        return { x: Math.max(14, Math.min(w - 14, x)), y: Math.max(14, Math.min(h - 14, y)) };
+      }
+
+      function renderMap() {
+        const canvas = document.getElementById("rt-map-canvas");
+        const tip = document.getElementById("rt-map-follow-tooltip");
+        if (!canvas || !tip) return;
+
+        let svg = canvas.querySelector("svg");
+        if (!svg) {
+          svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+          svg.setAttribute("width", "100%");
+          svg.setAttribute("height", "100%");
+          canvas.insertBefore(svg, tip);
+        }
+
+        const w = canvas.clientWidth || 340;
+        const h = canvas.clientHeight || 320;
+        svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+        while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+        const st = window.state || {};
+        const sc = st.servingCell || {};
+        const rf = st.rf || {};
+        const pci = sc.pci ?? sc.physicalCellId ?? "-";
+        const cid = sc.eci ?? sc.nci ?? sc.cid ?? "-";
+        const band = formatBandClean(sc.band || sc.earfcn || "-");
+        const rsrp = rf.rsrp ?? sc.rsrp ?? "-";
+        const sinr = rf.sinr ?? sc.sinr ?? "-";
+
+        const activeSite = sites[0];
+        const mePt = followMe ? { x: w * 0.5, y: h * 0.62 } : proj(coords.lat, coords.lon, w, h);
+        const sitePt = proj(activeSite.lat, activeSite.lon, w, h);
+
+        sites.forEach(s => {
+          const pt = followMe
+            ? { x: mePt.x + (s.lon - coords.lon) * 135, y: mePt.y - (s.lat - coords.lat) * 135 }
+            : proj(s.lat, s.lon, w, h);
+          const dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+          dot.setAttribute("cx", String(pt.x));
+          dot.setAttribute("cy", String(pt.y));
+          dot.setAttribute("r", "5");
+          dot.setAttribute("fill", "#38bdf8");
+          svg.appendChild(dot);
+        });
+
+        const linkLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        linkLine.setAttribute("x1", String(mePt.x));
+        linkLine.setAttribute("y1", String(mePt.y));
+        linkLine.setAttribute("x2", String(sitePt.x));
+        linkLine.setAttribute("y2", String(sitePt.y));
+        linkLine.setAttribute("stroke", "#f97316");
+        linkLine.setAttribute("stroke-width", "3.5");
+        svg.appendChild(linkLine);
+
+        const meDot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        meDot.setAttribute("cx", String(mePt.x));
+        meDot.setAttribute("cy", String(mePt.y));
+        meDot.setAttribute("r", "7");
+        meDot.setAttribute("fill", "#22c55e");
+        meDot.setAttribute("stroke", "#ffffff");
+        meDot.setAttribute("stroke-width", "2");
+        svg.appendChild(meDot);
+
+        tip.style.top = `${Math.max(8, Math.min(h - 96, mePt.y - 78))}px`;
+        tip.style.left = `${Math.max(8, Math.min(w - 245, mePt.x - 105))}px`;
+        tip.innerHTML = `
+          <div><strong>מיקום:</strong> <span class="rt-ltr-num">${coords.lat.toFixed(4)}, ${coords.lon.toFixed(4)}</span></div>
+          <div><strong>תחנה מחוברת:</strong> PCI <span class="rt-ltr-num">${pci}</span> | ID <span class="rt-ltr-num">${cid}</span></div>
+          <div><strong>Band:</strong> <span class="rt-ltr-num">${band}</span></div>
+          <div><strong>קליטה:</strong> <span class="rt-ltr-num">RSRP ${rsrp} dBm | SINR ${sinr} dB</span></div>
+        `;
+      }
+
+      mapBtn.addEventListener("click", () => {
+        const open = panel.classList.toggle("active");
+        if (open) {
+          pollLocation();
+          renderMap();
+        }
+      });
+
+      document.getElementById("rt-map-center-btn").addEventListener("click", () => {
+        followMe = true;
+        pollLocation();
+        renderMap();
+      });
+
+      setInterval(() => {
+        if (panel.classList.contains("active")) renderMap();
+      }, 2000);
+    }
+
+    function runIsoPass() {
+      applyIsoTopbarAndHelp();
+      normalizeBandsAndInlineUnits();
+      enhanceChartAxesAndToggle();
+      setupIsraelMapTab();
+    }
+
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", runIsoPass);
+    } else {
+      runIsoPass();
+    }
+    setInterval(() => {
+      applyIsoTopbarAndHelp();
+      normalizeBandsAndInlineUnits();
+    }, 2500);
+  })();
+
 </script>
 </body>
 </html>
