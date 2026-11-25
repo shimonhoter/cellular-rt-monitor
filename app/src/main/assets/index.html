@@ -1564,9 +1564,10 @@ ${sampledRows.join('\n')}`;
   window.addEventListener("load", runRestoreSequence);
   setInterval(function() {
     hookRealModemData();
-    hookResetButtons();
-    saveNow();
-  }, 500);
+    if (!document.hidden) {
+      saveNow();
+    }
+  }, 3500);
   document.addEventListener("visibilitychange", function() {
     if (document.hidden) saveNow();
     else restoreNow();
@@ -2927,12 +2928,13 @@ ${sampledRows.join('\n')}`;
 
 
 
-<script id="rt-unified-clean-v41">
-(function() {
-  if (window.__rtUnifiedCleanV41) return;
-  window.__rtUnifiedCleanV41 = true;
 
-  const BAND_MAP = {
+<script id="rt-fast-clean-v41">
+(function() {
+  if (window.__rtFastCleanV41) return;
+  window.__rtFastCleanV41 = true;
+
+  const BAND_INFO = {
     "B1": "2100 MHz (1920-1980 / 2110-2170 MHz)",
     "B3": "1800 MHz (1710-1785 / 1805-1880 MHz)",
     "B7": "2600 MHz (2500-2570 / 2620-2690 MHz)",
@@ -2949,15 +2951,15 @@ ${sampledRows.join('\n')}`;
     const m = s.match(/\b(n?\d{1,3})\b/i);
     if (!m) return s;
     const code = m[1].toLowerCase().startsWith("n") ? "n" + m[1].slice(1) : "B" + m[1];
-    return BAND_MAP[code] ? `${code} (${BAND_MAP[code]})` : s;
+    return BAND_INFO[code] ? `${code} (${BAND_INFO[code]})` : s;
   }
 
-  function enforceSingleExitAndChartControls() {
-    // Keep only #rt-explicit-exit-btn visible as exit button; hide any stray duplicate exit buttons/strips
+  // Remove any extra map buttons outside #tab-btn-map and enforce single exit + single chart expand control
+  function cleanupExtraButtons() {
     document.querySelectorAll("button").forEach(btn => {
-      if (btn.id === "rt-explicit-exit-btn") return;
+      if (btn.id === "tab-btn-map" || btn.id === "rt-explicit-exit-btn" || btn.id === "rt-chart-expand-btn") return;
       const t = (btn.textContent || "").trim();
-      if (t === "יציאה" || t === "4636" || t === "📱 4636") {
+      if (t === "מפה" || t === "🗺️ מפה" || t === "יציאה" || t === "4636" || t === "📱 4636") {
         btn.style.display = "none";
       }
     });
@@ -2965,27 +2967,131 @@ ${sampledRows.join('\n')}`;
       const el = document.querySelector(sel);
       if (el) el.style.display = "none";
     });
+  }
 
-    // Single chart expand/collapse control (#rt-chart-expand-btn)
-    const chartSec = document.getElementById("rfChart") ? document.getElementById("rfChart").closest("section") : null;
-    if (chartSec && !document.getElementById("rt-chart-expand-btn")) {
-      const hdr = chartSec.querySelector("div");
-      if (hdr) {
-        const btn = document.createElement("button");
-        btn.id = "rt-chart-expand-btn";
-        btn.type = "button";
-        btn.textContent = "הגדל גרף";
-        btn.style.cssText = "background:#1e293b;color:#e2e8f0;border:1px solid #475569;border-radius:5px;padding:1px 7px;font-size:10px;cursor:pointer;";
-        btn.addEventListener("click", function() {
-          const isExpanded = chartSec.dataset.rtExpanded === "1";
-          chartSec.dataset.rtExpanded = isExpanded ? "0" : "1";
-          chartSec.style.minHeight = isExpanded ? "85px" : "250px";
-          chartSec.style.flex = isExpanded ? "1 1 0%" : "0 0 250px";
-          this.textContent = isExpanded ? "הגדל גרף" : "צמצם גרף";
-        });
-        hdr.appendChild(btn);
+  // Ensure live samples also populate state.history so the live waveform chart always renders real telemetry
+  if (typeof window.onRealModemData === "function" && !window.onRealModemData._rtChartFeed) {
+    const prevOnData = window.onRealModemData;
+    window.onRealModemData = function(data) {
+      const r = prevOnData.apply(this, arguments);
+      try {
+        const st = window.state;
+        if (st && st.rf) {
+          const rsrp = st.rf.rsrp;
+          const rssi = st.rf.rssi;
+          const sinr = st.rf.sinr;
+          if (rsrp !== null || rssi !== null || sinr !== null) {
+            st.history = st.history || [];
+            const last = st.history[st.history.length - 1];
+            const sameAsLast = last && last.rsrp === rsrp && last.rssi === rssi && last.sinr === sinr && last._ts === Date.now();
+            if (!sameAsLast) {
+              st.history.push({
+                rsrp: typeof rsrp === "number" ? rsrp : -100,
+                rssi: typeof rssi === "number" ? rssi : -85,
+                sinr: typeof sinr === "number" ? sinr : 0,
+                _ts: Date.now()
+              });
+              if (st.history.length > 90) st.history.shift();
+            }
+          }
+        }
+      } catch (_e) {}
+      return r;
+    };
+    window.onRealModemData._rtChartFeed = true;
+  }
+
+  // Draw crisp axis ticks & labels on #rfChart and render only when #view-live is visible (saves CPU/battery)
+  function patchLiveChartRendering() {
+    const canvas = document.getElementById("rfChart");
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx || canvas._rtPatched) return;
+    canvas._rtPatched = true;
+
+    const origRAF = window.requestAnimationFrame;
+    let lastDraw = 0;
+
+    window.renderLiveChart = function() {
+      const now = performance.now();
+      const liveSec = document.getElementById("view-live");
+      const isLiveVisible = liveSec && !liveSec.classList.contains("hidden");
+      if (!isLiveVisible) {
+        origRAF.call(window, function() { setTimeout(window.renderLiveChart, 350); });
+        return;
       }
-    }
+      if (now - lastDraw < 140) {
+        origRAF.call(window, window.renderLiveChart);
+        return;
+      }
+      lastDraw = now;
+
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      const w = rect.width || canvas.parentElement?.clientWidth || 320;
+      const h = rect.height || canvas.parentElement?.clientHeight || 130;
+      if (w > 0 && h > 0 && (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr))) {
+        canvas.width = Math.round(w * dpr);
+        canvas.height = Math.round(h * dpr);
+      }
+
+      ctx.save();
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0, 0, w, h);
+
+      // Grid + Y/X axis labels
+      ctx.strokeStyle = "#1e293b";
+      ctx.lineWidth = 1;
+      ctx.font = "9px monospace";
+      ctx.fillStyle = "#94a3b8";
+      const yTicks = [
+        { ratio: 0.15, label: "-55 dBm" },
+        { ratio: 0.50, label: "-95 dBm" },
+        { ratio: 0.85, label: "-135 dBm" }
+      ];
+      yTicks.forEach(t => {
+        const y = Math.round(h * t.ratio);
+        ctx.beginPath();
+        ctx.moveTo(42, y);
+        ctx.lineTo(w - 6, y);
+        ctx.stroke();
+        ctx.fillText(t.label, 2, y + 3);
+      });
+      ctx.fillText("X: דגימות אחרונות", Math.max(46, w - 98), h - 3);
+
+      const st = window.state || {};
+      const hist = Array.isArray(st.history) && st.history.length > 0
+        ? st.history
+        : (Array.isArray(st.liveSamples) ? st.liveSamples.slice(-90) : []);
+
+      if (hist.length > 1) {
+        const plotW = Math.max(20, w - 48);
+        const plotH = Math.max(20, h - 18);
+        const stepX = plotW / Math.max(1, hist.length - 1);
+        const drawSeries = (key, minV, maxV, color) => {
+          ctx.beginPath();
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 1.8;
+          hist.forEach((pt, idx) => {
+            const rawV = pt[key] ?? pt?.rf?.[key];
+            if (typeof rawV !== "number" || Number.isNaN(rawV)) return;
+            const norm = Math.min(1, Math.max(0, (rawV - minV) / (maxV - minV)));
+            const x = 44 + idx * stepX;
+            const y = 6 + (1 - norm) * (plotH - 8);
+            if (idx === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          });
+          ctx.stroke();
+        };
+        drawSeries("rsrp", -135, -55, "#34d399");
+        drawSeries("rssi", -115, -40, "#fbbf24");
+        drawSeries("sinr", -10, 30, "#818cf8");
+      }
+
+      ctx.restore();
+      origRAF.call(window, window.renderLiveChart);
+    };
+    window.renderLiveChart();
   }
 
   window.rtTriggerCleanExit = function() {
@@ -3041,11 +3147,11 @@ ${sampledRows.join('\n')}`;
     sec.className = "tab-view flex-1 flex flex-col p-2 gap-2 overflow-y-auto hidden";
     sec.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;background:#0f172a;border:1px solid #1e293b;border-radius:10px;padding:8px 10px;">
-        <strong style="font-size:12px;">מפת תחנות בסיס בישראל ומיקום חי</strong>
+        <strong style="font-size:12px;">מפת ישראל ותחנות בסיס חיה</strong>
         <button type="button" id="rt-map-center-now" style="background:#2563eb;color:#fff;border:none;border-radius:7px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;">מרכז למיקומי הנוכחי</button>
       </div>
-      <div id="rt-map-stage" style="position:relative;width:100%;height:330px;background:#061021;border:1px solid #1e3a5f;border-radius:10px;overflow:hidden;">
-        <div id="rt-map-tooltip" style="position:absolute;top:10px;right:10px;max-width:255px;background:rgba(15,23,42,0.94);border:1px solid #38bdf8;border-radius:8px;padding:7px 9px;font-size:10px;line-height:1.4;color:#f8fafc;z-index:20;pointer-events:none;">
+      <div id="rt-map-stage" style="position:relative;width:100%;height:340px;background:#061326;border:1px solid #1e3a5f;border-radius:10px;overflow:hidden;">
+        <div id="rt-map-tooltip" style="position:absolute;top:10px;right:10px;max-width:260px;background:rgba(15,23,42,0.95);border:1px solid #38bdf8;border-radius:8px;padding:7px 9px;font-size:10px;line-height:1.45;color:#f8fafc;z-index:20;pointer-events:none;">
           ממתין למיקום ולתחנה מחוברת...
         </div>
       </div>
@@ -3054,19 +3160,19 @@ ${sampledRows.join('\n')}`;
     else host.appendChild(sec);
 
     const towers = [
-      { lat: 31.8044, lon: 34.6553 },
-      { lat: 32.0741, lon: 34.7922 },
-      { lat: 31.7781, lon: 35.1984 },
-      { lat: 32.8012, lon: 34.9896 },
-      { lat: 31.2518, lon: 34.7913 }
+      { name: "אשדוד", lat: 31.8044, lon: 34.6553 },
+      { name: "תל אביב", lat: 32.0741, lon: 34.7922 },
+      { name: "ירושלים", lat: 31.7781, lon: 35.1984 },
+      { name: "חיפה", lat: 32.8012, lon: 34.9896 },
+      { name: "באר שבע", lat: 31.2518, lon: 34.7913 }
     ];
     let gps = { lat: 31.8044, lon: 34.6553 };
     let centered = true;
 
     function toXY(lat, lon, w, h) {
-      const x = ((lon - 34.2) / (35.9 - 34.2)) * (w - 32) + 16;
-      const y = h - (((lat - 29.5) / (33.3 - 29.5)) * (h - 32) + 16);
-      return { x: Math.max(12, Math.min(w - 12, x)), y: Math.max(12, Math.min(h - 12, y)) };
+      const x = ((lon - 34.1) / (36.0 - 34.1)) * (w - 28) + 14;
+      const y = h - (((lat - 29.4) / (33.4 - 29.4)) * (h - 28) + 14);
+      return { x: Math.max(10, Math.min(w - 10, x)), y: Math.max(10, Math.min(h - 10, y)) };
     }
 
     window.rtRenderIsraelMap = function() {
@@ -3081,9 +3187,41 @@ ${sampledRows.join('\n')}`;
         stage.insertBefore(svg, tip);
       }
       const w = stage.clientWidth || 340;
-      const h = stage.clientHeight || 330;
+      const h = stage.clientHeight || 340;
       svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
       while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+      // Map grid & stylized Israel coast/outline so a real map context is always visible
+      for (let gx = 1; gx < 5; gx++) {
+        const vx = Math.round((w / 5) * gx);
+        const gl = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        gl.setAttribute("x1", String(vx)); gl.setAttribute("y1", "0");
+        gl.setAttribute("x2", String(vx)); gl.setAttribute("y2", String(h));
+        gl.setAttribute("stroke", "#0f2942"); gl.setAttribute("stroke-width", "1");
+        svg.appendChild(gl);
+      }
+      for (let gy = 1; gy < 5; gy++) {
+        const hy = Math.round((h / 5) * gy);
+        const gl = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        gl.setAttribute("x1", "0"); gl.setAttribute("y1", String(hy));
+        gl.setAttribute("x2", String(w)); gl.setAttribute("y2", String(hy));
+        gl.setAttribute("stroke", "#0f2942"); gl.setAttribute("stroke-width", "1");
+        svg.appendChild(gl);
+      }
+
+      const ilPoly = [
+        [33.25, 35.55], [32.85, 35.05], [32.08, 34.77], [31.50, 34.45],
+        [31.22, 34.25], [29.52, 34.95], [31.10, 35.38], [32.45, 35.60]
+      ].map(([la, lo]) => {
+        const p = toXY(la, lo, w, h);
+        return `${p.x.toFixed(1)},${p.y.toFixed(1)}`;
+      }).join(" ");
+      const poly = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+      poly.setAttribute("points", ilPoly);
+      poly.setAttribute("fill", "#0c233d");
+      poly.setAttribute("stroke", "#2563eb");
+      poly.setAttribute("stroke-width", "1.5");
+      svg.appendChild(poly);
 
       const st = window.state || {};
       const sc = st.servingCell || {};
@@ -3094,41 +3232,33 @@ ${sampledRows.join('\n')}`;
       const rsrp = rf.rsrp ?? sc.rsrp ?? "-";
       const sinr = rf.sinr ?? sc.sinr ?? "-";
 
-      const uPt = centered ? { x: w * 0.5, y: h * 0.62 } : toXY(gps.lat, gps.lon, w, h);
+      const uPt = centered ? { x: w * 0.45, y: h * 0.56 } : toXY(gps.lat, gps.lon, w, h);
       const tPt = toXY(towers[0].lat, towers[0].lon, w, h);
 
       towers.forEach(tw => {
         const pt = centered
-          ? { x: uPt.x + (tw.lon - gps.lon) * 140, y: uPt.y - (tw.lat - gps.lat) * 140 }
+          ? { x: uPt.x + (tw.lon - gps.lon) * 150, y: uPt.y - (tw.lat - gps.lat) * 150 }
           : toXY(tw.lat, tw.lon, w, h);
         const dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-        dot.setAttribute("cx", String(pt.x));
-        dot.setAttribute("cy", String(pt.y));
-        dot.setAttribute("r", "5");
-        dot.setAttribute("fill", "#38bdf8");
+        dot.setAttribute("cx", String(pt.x)); dot.setAttribute("cy", String(pt.y));
+        dot.setAttribute("r", "5"); dot.setAttribute("fill", "#38bdf8");
         svg.appendChild(dot);
       });
 
       const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
-      line.setAttribute("x1", String(uPt.x));
-      line.setAttribute("y1", String(uPt.y));
-      line.setAttribute("x2", String(tPt.x));
-      line.setAttribute("y2", String(tPt.y));
-      line.setAttribute("stroke", "#f97316");
-      line.setAttribute("stroke-width", "3.5");
+      line.setAttribute("x1", String(uPt.x)); line.setAttribute("y1", String(uPt.y));
+      line.setAttribute("x2", String(tPt.x)); line.setAttribute("y2", String(tPt.y));
+      line.setAttribute("stroke", "#f97316"); line.setAttribute("stroke-width", "3.5");
       svg.appendChild(line);
 
       const me = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-      me.setAttribute("cx", String(uPt.x));
-      me.setAttribute("cy", String(uPt.y));
-      me.setAttribute("r", "7");
-      me.setAttribute("fill", "#22c55e");
-      me.setAttribute("stroke", "#ffffff");
-      me.setAttribute("stroke-width", "2");
+      me.setAttribute("cx", String(uPt.x)); me.setAttribute("cy", String(uPt.y));
+      me.setAttribute("r", "7"); me.setAttribute("fill", "#22c55e");
+      me.setAttribute("stroke", "#ffffff"); me.setAttribute("stroke-width", "2");
       svg.appendChild(me);
 
-      tip.style.top = `${Math.max(8, Math.min(h - 92, uPt.y - 74))}px`;
-      tip.style.left = `${Math.max(8, Math.min(w - 250, uPt.x - 108))}px`;
+      tip.style.top = `${Math.max(8, Math.min(h - 94, uPt.y - 76))}px`;
+      tip.style.left = `${Math.max(8, Math.min(w - 255, uPt.x - 110))}px`;
       tip.innerHTML = `
         <div><strong>מיקום:</strong> <span dir="ltr">${gps.lat.toFixed(4)}, ${gps.lon.toFixed(4)}</span></div>
         <div><strong>תחנה מחוברת:</strong> PCI <span dir="ltr">${pci}</span> | ID <span dir="ltr">${cid}</span></div>
@@ -3169,8 +3299,8 @@ ${sampledRows.join('\n')}`;
     if (typeof origSwitchTab === "function") origSwitchTab(tabName);
   };
 
-  function syncAll() {
-    enforceSingleExitAndChartControls();
+  function syncLight() {
+    cleanupExtraButtons();
     ["cell-band", "cell-bw"].forEach(id => {
       const el = document.getElementById(id);
       if (el && el.textContent && el.textContent.trim() !== "---") {
@@ -3178,6 +3308,25 @@ ${sampledRows.join('\n')}`;
         if (el.textContent !== next) el.textContent = next;
       }
     });
+    const chartSec = document.getElementById("rfChart") ? document.getElementById("rfChart").closest("section") : null;
+    if (chartSec && !document.getElementById("rt-chart-expand-btn")) {
+      const hdr = chartSec.querySelector("div");
+      if (hdr) {
+        const btn = document.createElement("button");
+        btn.id = "rt-chart-expand-btn";
+        btn.type = "button";
+        btn.textContent = "הגדל גרף";
+        btn.style.cssText = "background:#1e293b;color:#e2e8f0;border:1px solid #475569;border-radius:5px;padding:1px 7px;font-size:10px;cursor:pointer;";
+        btn.addEventListener("click", function() {
+          const big = chartSec.dataset.rtExpanded === "1";
+          chartSec.dataset.rtExpanded = big ? "0" : "1";
+          chartSec.style.minHeight = big ? "85px" : "250px";
+          chartSec.style.flex = big ? "1 1 0%" : "0 0 250px";
+          this.textContent = big ? "הגדל גרף" : "צמצם גרף";
+        });
+        hdr.appendChild(btn);
+      }
+    }
     const mv = document.getElementById("view-map");
     if (mv && !mv.classList.contains("hidden") && typeof window.rtRenderIsraelMap === "function") {
       window.rtRenderIsraelMap();
@@ -3185,12 +3334,13 @@ ${sampledRows.join('\n')}`;
   }
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", () => { ensureMapView(); syncAll(); });
+    document.addEventListener("DOMContentLoaded", () => { ensureMapView(); patchLiveChartRendering(); syncLight(); });
   } else {
     ensureMapView();
-    syncAll();
+    patchLiveChartRendering();
+    syncLight();
   }
-  setInterval(syncAll, 2500);
+  setInterval(syncLight, 3000);
 })();
 </script>
 
