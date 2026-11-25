@@ -2425,5 +2425,111 @@ if (window.__rtStableV41) return;
 })();
 </script>
 
+
+<script id="rt-rf-render-unified-v8">
+/* RT_RF_RENDER_UNIFIED_V8 */
+(function() {
+  if (window.__rtRfRenderUnifiedV8) return;
+  window.__rtRfRenderUnifiedV8 = true;
+
+  function esc(v) {
+    return String(v ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }
+
+  function fmtNum(v, unit) {
+    var n = Number(v);
+    return Number.isFinite(n) ? (n.toFixed(1) + (unit ? " " + unit : "")) : "--";
+  }
+
+  function buildSampleRfCards(samples) {
+    if (!Array.isArray(samples) || samples.length === 0) return [];
+    var recent = samples.slice(-80).reverse();
+    return recent.map(function(s) {
+      var tsRaw = String(s.timestamp || "");
+      var ts = tsRaw.includes("T") ? tsRaw.split("T").pop().replace("Z", "").slice(0, 12) : (tsRaw || new Date().toTimeString().split(" ")[0]);
+      var tech = s.tech || s.rat || "CELL";
+      var band = s.band || "---";
+      var pci = (s.cell_id !== undefined && s.cell_id !== null && s.cell_id !== "") ? s.cell_id : "--";
+      var title = tech + " PCI:" + pci + " | " + band;
+      var summary =
+        "RSRP: " + fmtNum(s.rsrp, "dBm") +
+        " | RSRQ: " + fmtNum(s.rsrq, "dB") +
+        " | SINR: " + fmtNum(s.sinr, "dB") +
+        (s.rssi !== undefined && s.rssi !== null ? " | RSSI: " + fmtNum(s.rssi, "dBm") : "");
+      return {
+        category: "RF",
+        direction: "SAMPLE",
+        timestamp: ts,
+        title: title,
+        summary: summary
+      };
+    });
+  }
+
+  function unifiedRenderLogs() {
+    var container = document.getElementById("log-stream");
+    if (!container) return;
+
+    var st = window.state || (typeof state !== "undefined" ? state : null);
+    var activeFilter = (st && st.logFilter) ? st.logFilter : "ALL";
+    var rawLogs = (st && Array.isArray(st.logs)) ? st.logs : [];
+    var activeSamples = (typeof getActiveSamples === "function") ? getActiveSamples() : ((st && Array.isArray(st.liveSamples)) ? st.liveSamples : []);
+    var sampleRfCards = buildSampleRfCards(activeSamples);
+
+    var combined = [];
+    if (activeFilter === "RF") {
+      var rfLogs = rawLogs.filter(function(l) { return l && l.category === "RF"; });
+      combined = rfLogs.concat(sampleRfCards);
+    } else if (activeFilter === "ALL") {
+      combined = rawLogs.concat(sampleRfCards.slice(0, 25));
+    } else {
+      combined = rawLogs.filter(function(l) { return l && l.category === activeFilter; });
+    }
+
+    var rfTotalCount = rawLogs.filter(function(l) { return l && l.category === "RF"; }).length + sampleRfCards.length;
+    var cEl = document.getElementById("rt-rf-diag-counts");
+    var lEl = document.getElementById("rt-rf-diag-last");
+    if (cEl) cEl.textContent = "RF: " + rfTotalCount + " | Samples: " + (Array.isArray(activeSamples) ? activeSamples.length : 0) + " | Filter: " + activeFilter;
+    if (lEl && sampleRfCards.length > 0) lEl.textContent = sampleRfCards[0].title + " • " + sampleRfCards[0].summary;
+
+    if (combined.length === 0) {
+      container.innerHTML = '<div class="text-slate-500 text-center py-6">אין רשומות להצגה בקטגוריה זו.</div>';
+      return;
+    }
+
+    container.innerHTML = combined.map(function(log) {
+      var badge = log.category === "HO"
+        ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
+        : (log.category === "RF" ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40" : "bg-amber-500/20 text-amber-300 border border-amber-500/30");
+      var borderCol = log.category === "RF" ? "border-emerald-800/50" : "border-slate-800";
+      return (
+        '<div class="bg-slate-900/90 border ' + borderCol + ' rounded p-2 text-slate-200 space-y-1">' +
+          '<div class="flex items-center justify-between gap-2 text-[11px]">' +
+            '<span class="px-1.5 py-0.5 rounded font-bold ' + badge + '">' + esc(log.category || "SYS") + '</span>' +
+            '<span class="text-slate-400">' + esc(log.direction || "") + '</span>' +
+            '<span class="text-slate-500 font-mono">' + esc(log.timestamp || "") + '</span>' +
+          '</div>' +
+          '<div class="font-semibold text-cyan-200 break-all">' + esc(log.title || "") + '</div>' +
+          '<div class="text-xs text-slate-300 break-all">' + esc(log.summary || "") + '</div>' +
+        '</div>'
+      );
+    }).join("");
+  }
+
+  window.renderLogs = unifiedRenderLogs;
+  try { renderLogs = unifiedRenderLogs; } catch (_e) {}
+
+  setInterval(function() {
+    var viewLogs = document.getElementById("view-logs");
+    if (viewLogs && !viewLogs.classList.contains("hidden")) {
+      unifiedRenderLogs();
+    }
+  }, 1000);
+})();
+</script>
+
 </body>
 </html>
