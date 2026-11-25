@@ -1266,7 +1266,38 @@ ${sampledRows.join('\n')}`;
 
 <script id="rt-stable-v41">
 (function() {
-  if (window.__rtStableV41) return;
+  
+
+window.rtSwitchToMapTab = function() {
+  if (typeof window.switchTab === "function") {
+    window.switchTab("map");
+  }
+};
+
+if (typeof window.onRealModemData === "function" && !window.onRealModemData._rtRfLogHook) {
+  const prevModemHandler = window.onRealModemData;
+  let lastRfLogTs = 0;
+  window.onRealModemData = function(payload) {
+    const res = prevModemHandler.apply(this, arguments);
+    try {
+      const now = Date.now();
+      if (now - lastRfLogTs >= 2000 && typeof addLog === "function" && window.state && window.state.rf) {
+        lastRfLogTs = now;
+        const sc = window.state.servingCell || {};
+        const rf = window.state.rf;
+        const rsrpTxt = typeof rf.rsrp === "number" ? `${rf.rsrp.toFixed(1)} dBm` : "--";
+        const rsrqTxt = typeof rf.rsrq === "number" ? `${rf.rsrq.toFixed(1)} dB` : "--";
+        const sinrTxt = typeof rf.sinr === "number" ? `${rf.sinr.toFixed(1)} dB` : "--";
+        const title = `${sc.tech || window.state.activeRat || "CELL"} PCI:${sc.pci ?? "--"} | ${sc.band || "---"}`;
+        addLog("RF", "MODEM", title, `RSRP: ${rsrpTxt} | RSRQ: ${rsrqTxt} | SINR: ${sinrTxt}`);
+      }
+    } catch (_e) {}
+    return res;
+  };
+  window.onRealModemData._rtRfLogHook = true;
+}
+
+if (window.__rtStableV41) return;
   window.__rtStableV41 = true;
 
   const BANDS = {
