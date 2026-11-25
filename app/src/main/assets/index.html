@@ -474,7 +474,9 @@
             });
             document.getElementById('tab-btn-' + tabName).className = 'tab-btn py-1 rounded-md bg-cyan-600 text-white transition';
 
-            if (tabName === 'analytics') {
+            if (tabName === 'logs') {
+                if (typeof renderLogs === 'function') renderLogs();
+            } else if (tabName === 'analytics') {
                 runLogAnalytics();
             } else if (tabName === 'ai') {
                 document.getElementById('ai-dataset-badge').textContent =
