@@ -1268,6 +1268,48 @@ ${sampledRows.join('\n')}`;
 (function() {
   
 
+
+
+window.rtSwitchToMapTab = function() {
+  try {
+    if (typeof window.switchTab === "function") {
+      window.switchTab("map");
+      return;
+    }
+  } catch (_e) {}
+  document.querySelectorAll(".tab-view").forEach(function(v) { v.classList.add("hidden"); });
+  var mv = document.getElementById("view-map");
+  if (mv) mv.classList.remove("hidden");
+  if (typeof window.rtRenderIsraelMap === "function") window.rtRenderIsraelMap();
+};
+
+(function attachLiveRfLogs() {
+  if (window.__rtRfLogAttached) return;
+  window.__rtRfLogAttached = true;
+  var prev = window.onRealModemData;
+  var lastTs = 0;
+  window.onRealModemData = function(payload) {
+    var out;
+    if (typeof prev === "function") {
+      out = prev.apply(this, arguments);
+    }
+    try {
+      var now = Date.now();
+      if (now - lastTs >= 1500 && typeof window.addLog === "function" && window.state && window.state.rf) {
+        lastTs = now;
+        var sc = window.state.servingCell || {};
+        var rf = window.state.rf || {};
+        var rsrp = (typeof rf.rsrp === "number") ? rf.rsrp.toFixed(1) + " dBm" : "--";
+        var rsrq = (typeof rf.rsrq === "number") ? rf.rsrq.toFixed(1) + " dB" : "--";
+        var sinr = (typeof rf.sinr === "number") ? rf.sinr.toFixed(1) + " dB" : "--";
+        var title = (sc.tech || window.state.activeRat || "CELL") + " PCI:" + (sc.pci != null ? sc.pci : "--") + " | " + (sc.band || "---");
+        window.addLog("RF", "MODEM", title, "RSRP: " + rsrp + " | RSRQ: " + rsrq + " | SINR: " + sinr);
+      }
+    } catch (_e) {}
+    return out;
+  };
+})();
+
 window.rtSwitchToMapTab = function() {
   if (typeof window.switchTab === "function") {
     window.switchTab("map");
