@@ -2224,5 +2224,206 @@ if (window.__rtStableV41) return;
 })();
 </script>
 
+
+<script id="rt-rf-v7-and-exit-save">
+/* RT_RF_V7_AND_EXIT_SAVE */
+(function() {
+  if (window.__rtRfV7AndExitSave) return;
+  window.__rtRfV7AndExitSave = true;
+
+  var lastSamplePush = 0;
+
+  function resolveState() {
+    if (window.state && typeof window.state === "object") return window.state;
+    try {
+      if (typeof state !== "undefined" && state && typeof state === "object") {
+        window.state = state;
+        return state;
+      }
+    } catch (_e) {}
+    return null;
+  }
+
+  function getRfMetrics() {
+    var st = resolveState();
+    var sc = (st && st.servingCell) ? st.servingCell : {};
+    var rf = (st && st.rf) ? st.rf : {};
+
+    function readNum(stateVal, elId) {
+      if (typeof stateVal === "number" && Number.isFinite(stateVal)) return stateVal;
+      var el = document.getElementById(elId);
+      if (el && el.textContent) {
+        var parsed = parseFloat(el.textContent.replace(/[^0-9.+-]/g, ""));
+        if (Number.isFinite(parsed)) return parsed;
+      }
+      return null;
+    }
+
+    var rsrp = readNum(rf.rsrp, "val-rsrp");
+    var rsrq = readNum(rf.rsrq, "val-rsrq");
+    var sinr = readNum(rf.sinr, "val-sinr");
+    var rssi = readNum(rf.rssi, "val-rssi");
+
+    var tech = (sc.tech && sc.tech !== "---") ? String(sc.tech) : ((st && st.activeRat) ? String(st.activeRat) : "4G LTE");
+    var pci = (sc.pci !== undefined && sc.pci !== null && String(sc.pci) !== "---") ? String(sc.pci) : "--";
+    var band = (sc.band && sc.band !== "---") ? String(sc.band) : "--";
+
+    var nowStr = new Date().toTimeString().split(" ")[0];
+    var title = tech + " PCI:" + pci + " | " + band;
+    var summary =
+      "RSRP: " + (rsrp !== null ? rsrp.toFixed(1) + " dBm" : "--") +
+      " | RSRQ: " + (rsrq !== null ? rsrq.toFixed(1) + " dB" : "--") +
+      " | SINR: " + (sinr !== null ? sinr.toFixed(1) + " dB" : "--") +
+      (rssi !== null ? " | RSSI: " + rssi.toFixed(1) + " dBm" : "");
+
+    return {
+      st: st,
+      timestamp: nowStr,
+      title: title,
+      summary: summary,
+      hasLive: (rsrp !== null || rsrq !== null || sinr !== null || pci !== "--")
+    };
+  }
+
+  function appendRfRecordIfNeeded(force) {
+    var m = getRfMetrics();
+    var st = m.st;
+    if (!st) return m;
+    st.logs = Array.isArray(st.logs) ? st.logs : [];
+    var now = Date.now();
+    if (force || (m.hasLive && (now - lastSamplePush >= 1500))) {
+      lastSamplePush = now;
+      st.logs.unshift({
+        id: now + Math.random(),
+        timestamp: m.timestamp,
+        category: "RF",
+        direction: "MODEM",
+        title: m.title,
+        summary: m.summary
+      });
+      if (st.logs.length > 400) st.logs.pop();
+    }
+    return m;
+  }
+
+  function isRfFilterSelected() {
+    var st = resolveState();
+    if (st && st.logFilter === "RF") return true;
+    var btnRf = document.getElementById("filter-RF");
+    if (btnRf && /bg-cyan-600/.test(btnRf.className || "")) return true;
+    return false;
+  }
+
+  function escHtml(v) {
+    return String(v ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }
+
+  function renderRfCardsDirect() {
+    var m = appendRfRecordIfNeeded(false);
+    var st = m.st;
+    var logsArr = (st && Array.isArray(st.logs)) ? st.logs : [];
+    var rfList = logsArr.filter(function(item) { return item && item.category === "RF"; });
+
+    if (rfList.length === 0 && m.hasLive) {
+      rfList = [{
+        timestamp: m.timestamp,
+        category: "RF",
+        direction: "MODEM",
+        title: m.title,
+        summary: m.summary
+      }];
+    }
+
+    var filterName = (st && st.logFilter) ? st.logFilter : (isRfFilterSelected() ? "RF" : "ALL");
+    var cEl = document.getElementById("rt-rf-diag-counts");
+    var lEl = document.getElementById("rt-rf-diag-last");
+    if (cEl) cEl.textContent = "RF: " + rfList.length + " | Logs: " + logsArr.length + " | Filter: " + filterName;
+    if (lEl) lEl.textContent = m.title + " • " + m.summary;
+
+    var viewLogs = document.getElementById("view-logs");
+    var stream = document.getElementById("log-stream");
+    if (!stream || !viewLogs || viewLogs.classList.contains("hidden")) return;
+    if (!isRfFilterSelected()) return;
+
+    if (rfList.length === 0) {
+      stream.innerHTML = '<div class="text-slate-400 text-center py-6">ממתין לדגימות RF מהמודם...</div>';
+      return;
+    }
+
+    stream.innerHTML = rfList.slice(0, 120).map(function(log) {
+      return (
+        '<div class="bg-slate-900/95 border border-emerald-700/40 rounded p-2 text-slate-200 space-y-1">' +
+          '<div class="flex items-center justify-between gap-2 text-[11px]">' +
+            '<span class="px-1.5 py-0.5 rounded font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">RF</span>' +
+            '<span class="text-slate-400">' + escHtml(log.direction || "MODEM") + '</span>' +
+            '<span class="text-slate-400 font-mono">' + escHtml(log.timestamp || "") + '</span>' +
+          '</div>' +
+          '<div class="font-bold text-cyan-200 break-all">' + escHtml(log.title || "") + '</div>' +
+          '<div class="text-xs text-emerald-200 font-mono break-all">' + escHtml(log.summary || "") + '</div>' +
+        '</div>'
+      );
+    }).join("");
+  }
+
+  window.rtPersistFullStateNow = function() {
+    try {
+      var st = resolveState();
+      var snapshot = {
+        savedAt: new Date().toISOString(),
+        servingCell: st ? st.servingCell : {},
+        rf: st ? st.rf : {},
+        liveSamples: (st && Array.isArray(st.liveSamples)) ? st.liveSamples : [],
+        logs: (st && Array.isArray(st.logs)) ? st.logs : []
+      };
+      var jsonStr = JSON.stringify(snapshot);
+      try { localStorage.setItem("rt_monitor_backup_state", jsonStr); } catch (_e) {}
+      if (window.AndroidModem) {
+        if (typeof window.AndroidModem.saveStateToDevice === "function") {
+          window.AndroidModem.saveStateToDevice(jsonStr);
+        }
+        if (typeof window.AndroidModem.saveExportFile === "function") {
+          window.AndroidModem.saveExportFile("cellular_exit_backup_" + Date.now() + ".json", jsonStr);
+        }
+      }
+    } catch (_e) {}
+  };
+
+  var prevExit = window.rtTriggerCleanExit;
+  window.rtTriggerCleanExit = function() {
+    try { window.rtPersistFullStateNow(); } catch (_e) {}
+    try {
+      if (window.AndroidModem && typeof window.AndroidModem.exitApp === "function") {
+        window.AndroidModem.exitApp();
+        return;
+      }
+    } catch (_e) {}
+    if (typeof prevExit === "function") {
+      try { prevExit.apply(this, arguments); } catch (_e) {}
+    }
+  };
+
+  ["filter-RF", "filter-ALL", "filter-HO", "filter-SYS", "tab-btn-logs"].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el && !el._rtV7Bound) {
+      el.addEventListener("click", function() {
+        if (id === "filter-RF") appendRfRecordIfNeeded(true);
+        setTimeout(renderRfCardsDirect, 40);
+        setTimeout(renderRfCardsDirect, 200);
+      });
+      el._rtV7Bound = true;
+    }
+  });
+
+  setInterval(renderRfCardsDirect, 1200);
+  setTimeout(function() {
+    appendRfRecordIfNeeded(true);
+    renderRfCardsDirect();
+  }, 500);
+})();
+</script>
+
 </body>
 </html>
