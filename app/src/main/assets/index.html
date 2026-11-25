@@ -2096,5 +2096,133 @@ if (window.__rtStableV41) return;
 })();
 </script>
 
+
+<script id="rt-rf-stream-v6-direct-dom">
+/* RT_RF_STREAM_V6_DIRECT_DOM */
+(function() {
+  if (window.__rtRfStreamV6DirectDom) return;
+  window.__rtRfStreamV6DirectDom = true;
+
+  var lastPushMs = 0;
+
+  function getAppState() {
+    if (window.state && typeof window.state === "object") return window.state;
+    try {
+      if (typeof state !== "undefined" && state && typeof state === "object") {
+        window.state = state;
+        return state;
+      }
+    } catch (_e) {}
+    return null;
+  }
+
+  function extractRfFromDomAndState() {
+    var st = getAppState();
+    var sc = (st && st.servingCell) ? st.servingCell : {};
+    var rf = (st && st.rf) ? st.rf : {};
+
+    var rsrpVal = (typeof rf.rsrp === "number" && Number.isFinite(rf.rsrp)) ? rf.rsrp : null;
+    var rsrqVal = (typeof rf.rsrq === "number" && Number.isFinite(rf.rsrq)) ? rf.rsrq : null;
+    var sinrVal = (typeof rf.sinr === "number" && Number.isFinite(rf.sinr)) ? rf.sinr : null;
+
+    if (rsrpVal === null) {
+      var elRsrp = document.getElementById("val-rsrp");
+      if (elRsrp && elRsrp.textContent) {
+        var n1 = parseFloat(elRsrp.textContent.trim());
+        if (Number.isFinite(n1)) rsrpVal = n1;
+      }
+    }
+    if (rsrqVal === null) {
+      var elRsrq = document.getElementById("val-rsrq");
+      if (elRsrq && elRsrq.textContent) {
+        var n2 = parseFloat(elRsrq.textContent.trim());
+        if (Number.isFinite(n2)) rsrqVal = n2;
+      }
+    }
+    if (sinrVal === null) {
+      var elSinr = document.getElementById("val-sinr");
+      if (elSinr && elSinr.textContent) {
+        var n3 = parseFloat(elSinr.textContent.trim());
+        if (Number.isFinite(n3)) sinrVal = n3;
+      }
+    }
+
+    var tech = (sc.tech && sc.tech !== "---") ? sc.tech : ((st && st.activeRat) ? st.activeRat : "4G LTE");
+    var pci = (sc.pci !== undefined && sc.pci !== null && sc.pci !== "---") ? sc.pci : "--";
+    var band = (sc.band && sc.band !== "---") ? sc.band : "--";
+
+    return {
+      st: st,
+      title: tech + " PCI:" + pci + " | " + band,
+      summary:
+        "RSRP: " + (rsrpVal !== null ? rsrpVal.toFixed(1) + " dBm" : "--") +
+        " | RSRQ: " + (rsrqVal !== null ? rsrqVal.toFixed(1) + " dB" : "--") +
+        " | SINR: " + (sinrVal !== null ? sinrVal.toFixed(1) + " dB" : "--"),
+      hasData: (rsrpVal !== null || rsrqVal !== null || sinrVal !== null || pci !== "--")
+    };
+  }
+
+  function syncV6(forceInsert) {
+    try {
+      var info = extractRfFromDomAndState();
+      var st = info.st;
+      var now = Date.now();
+
+      if (st) {
+        st.logs = Array.isArray(st.logs) ? st.logs : [];
+        if (forceInsert || (info.hasData && (now - lastPushMs >= 1500))) {
+          lastPushMs = now;
+          var ts = new Date().toTimeString().split(" ")[0];
+          st.logs.unshift({
+            id: now + Math.random(),
+            timestamp: ts,
+            category: "RF",
+            direction: "MODEM",
+            title: info.title,
+            summary: info.summary
+          });
+          if (st.logs.length > 400) st.logs.pop();
+        }
+      }
+
+      var logsArr = (st && Array.isArray(st.logs)) ? st.logs : [];
+      var rfLogs = logsArr.filter(function(x) { return x && x.category === "RF"; });
+      var filter = (st && st.logFilter) ? st.logFilter : "ALL";
+
+      var cEl = document.getElementById("rt-rf-diag-counts");
+      var lEl = document.getElementById("rt-rf-diag-last");
+      if (cEl) cEl.textContent = "RF: " + rfLogs.length + " | Logs: " + logsArr.length + " | Filter: " + filter;
+      if (lEl) lEl.textContent = info.title + " • " + info.summary;
+
+      var streamEl = document.getElementById("log-stream");
+      var viewLogs = document.getElementById("view-logs");
+      if (streamEl && viewLogs && !viewLogs.classList.contains("hidden")) {
+        if (typeof window.renderLogs === "function") {
+          window.renderLogs();
+        } else if (typeof renderLogs === "function") {
+          renderLogs();
+        }
+      }
+    } catch (_e) {}
+  }
+
+  var btnRf = document.getElementById("filter-RF");
+  if (btnRf && !btnRf._rtV6Click) {
+    btnRf.addEventListener("click", function() {
+      setTimeout(function() { syncV6(true); }, 30);
+    });
+    btnRf._rtV6Click = true;
+  }
+
+  setInterval(function() {
+    syncV6(false);
+  }, 1500);
+
+  setTimeout(function() {
+    syncV6(true);
+  }, 600);
+})();
+</script>
+
 </body>
 </html>
