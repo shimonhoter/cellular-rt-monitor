@@ -1859,6 +1859,84 @@ ${sampledRows.join('\n')}`;
     applyAllLayoutRules();
   }
 })();
+
+  (function() {
+    if (window.__rtClearAndPersistenceGuardInstalled) return;
+    window.__rtClearAndPersistenceGuardInstalled = true;
+
+    window.rtConfirmClearAction = function(labelText) {
+      const msg = "האם אתה בטוח שברצונך לבצע " + (labelText || "ניקוי נתונים") + "? הנתונים שנמחקים לא ישוחזרו.";
+      try {
+        return window.confirm(msg) === true;
+      } catch (_e) {
+        return false;
+      }
+    };
+
+    window.rtExecuteProtectedClear = function(labelText, clearFn) {
+      if (!window.rtConfirmClearAction(labelText)) {
+        try { if (typeof addLog === "function") addLog("SYS", "CLEAR", "בוטל ניקוי: " + (labelText || "נתונים")); } catch (_e) {}
+        return false;
+      }
+      try {
+        if (typeof clearFn === "function") clearFn();
+      } catch (_e) {}
+      try {
+        if (typeof window.rtPersistFullStateNow === "function") window.rtPersistFullStateNow();
+      } catch (_e) {}
+      try { if (typeof addLog === "function") addLog("SYS", "CLEAR", "בוצע ניקוי מאושר: " + (labelText || "נתונים")); } catch (_e) {}
+      return true;
+    };
+
+    function bindClearButtons() {
+      const allButtons = Array.from(document.querySelectorAll("button, [role='button'], .btn, .action-btn"));
+      allButtons.forEach(function(btn) {
+        if (btn.dataset.rtClearGuarded === "1") return;
+        const txt = ((btn.innerText || btn.textContent || "") + " " + (btn.id || "") + " " + (btn.getAttribute("onclick") || "")).toLowerCase();
+        const isClearBtn = txt.includes("נקה") || txt.includes("clear") || txt.includes("reset");
+        if (!isClearBtn) return;
+        btn.dataset.rtClearGuarded = "1";
+
+        const origOnclick = btn.getAttribute("onclick");
+        if (origOnclick) {
+          btn.removeAttribute("onclick");
+        }
+
+        btn.addEventListener("click", function(ev) {
+          if (btn.dataset.rtBypassGuard === "1") {
+            btn.dataset.rtBypassGuard = "0";
+            return;
+          }
+          ev.preventDefault();
+          ev.stopImmediatePropagation();
+          const label = (btn.innerText || btn.textContent || btn.id || "ניקוי נתונים").trim();
+          const ok = window.rtConfirmClearAction(label);
+          if (!ok) {
+            try { if (typeof addLog === "function") addLog("SYS", "CLEAR", "בוטל ניקוי: " + label); } catch (_e) {}
+            return;
+          }
+          if (origOnclick) {
+            try {
+              const fn = new Function(origOnclick);
+              fn.call(btn);
+            } catch (_e) {}
+          } else {
+            btn.dataset.rtBypassGuard = "1";
+            btn.click();
+          }
+          try { if (typeof window.rtPersistFullStateNow === "function") window.rtPersistFullStateNow(); } catch (_e) {}
+        }, true);
+      });
+    }
+
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", bindClearButtons);
+    } else {
+      bindClearButtons();
+    }
+    setInterval(bindClearButtons, 2000);
+  })();
+
 </script>
 </body>
 </html>

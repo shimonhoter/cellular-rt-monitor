@@ -84,6 +84,24 @@ class MainActivity : AppCompatActivity() {
                 }
             }
             webChromeClient = object : WebChromeClient() {
+                override fun onJsConfirm(
+                    view: WebView?,
+                    url: String?,
+                    message: String?,
+                    result: android.webkit.JsResult?
+                ): Boolean {
+                    val res = result ?: return false
+                    runOnUiThread {
+                        androidx.appcompat.app.AlertDialog.Builder(this@MainActivity)
+                            .setTitle("אישור פעולת ניקוי")
+                            .setMessage(message ?: "האם אתה בטוח שברצונך לנקות את הנתונים?")
+                            .setPositiveButton("כן, נקה") { _, _ -> res.confirm() }
+                            .setNegativeButton("ביטול") { _, _ -> res.cancel() }
+                            .setOnCancelListener { res.cancel() }
+                            .show()
+                    }
+                    return true
+                }
                 override fun onShowFileChooser(
                     webView: WebView?,
                     filePathCallback: ValueCallback<Array<Uri>>?,
