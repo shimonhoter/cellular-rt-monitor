@@ -579,16 +579,29 @@
 
         function renderLogs() {
             const container = document.getElementById('log-stream');
-            const filtered = state.logs.filter(l => state.logFilter === 'ALL' || l.category === state.logFilter);
+            if (!container) return;
+            const logsArr = Array.isArray(state.logs) ? state.logs : [];
+            const activeFilter = state.logFilter || 'ALL';
+            const filtered = logsArr.filter(l => activeFilter === 'ALL' || l.category === activeFilter);
             if (filtered.length === 0) {
                 container.innerHTML = '<div class="text-slate-500 text-center py-6">אין רשומות להצגה בקטגוריה זו.</div>';
                 return;
             }
+            const esc = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             container.innerHTML = filtered.map(log => {
                 const badge = log.category === 'HO'
                     ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
-                    : (log.category === 'RF' ? 'bg-emerald-500/15 text-emerald-300' : 'bg-amber-500/20 text-amber-300');
+                    : (log.category === 'RF' ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30');
                 return `
+                    <div class="bg-slate-900/90 border border-slate-800 rounded p-2 text-slate-200 space-y-1">
+                        <div class="flex items-center justify-between gap-2 text-[11px]">
+                            <span class="px-1.5 py-0.5 rounded font-bold ${badge}">${esc(log.category || 'SYS')}</span>
+                            <span class="text-slate-400">${esc(log.direction || '')}</span>
+                            <span class="text-slate-500 font-mono">${esc(log.timestamp || '')}</span>
+                        </div>
+                        <div class="font-semibold text-cyan-200 break-all">${esc(log.title || '')}</div>
+                        <div class="text-slate-300 break-all">${esc(log.summary || '')}</div>
+                    </div>
                 `;
             }).join('');
         }
@@ -1803,6 +1816,46 @@ if (window.__rtStableV41) return;
 
   wrapModemFn();
   setInterval(wrapModemFn, 1500);
+})();
+</script>
+
+
+<script id="rt-rf-diag-test-v1">
+/* RT_RF_DIAG_TEST_V1 */
+(function() {
+  if (window.__rtRfDiagTestV1) return;
+  window.__rtRfDiagTestV1 = true;
+
+  window.__rtDiagPushRf = function(tag) {
+    try {
+      var label = tag || "DIAG_TEST";
+      if (typeof window.addLog === "function") {
+        window.addLog(
+          "RF",
+          label,
+          "LTE/NR PCI:101 | B3",
+          "RSRP: -85.0 dBm | RSRQ: -10.5 dB | SINR: 12.0 dB"
+        );
+      }
+      if (typeof window.state === "object" && window.state) {
+        if (window.state.logFilter !== "RF" && window.state.logFilter !== "ALL") {
+          window.state.logFilter = "RF";
+        }
+      }
+      if (typeof window.renderLogs === "function") {
+        window.renderLogs();
+      }
+      return {
+        logsCount: (window.state && Array.isArray(window.state.logs)) ? window.state.logs.length : -1,
+        rfCount: (window.state && Array.isArray(window.state.logs))
+          ? window.state.logs.filter(function(x) { return x && x.category === "RF"; }).length
+          : -1,
+        logFilter: window.state ? window.state.logFilter : null
+      };
+    } catch (e) {
+      return { error: String(e) };
+    }
+  };
 })();
 </script>
 
