@@ -271,6 +271,12 @@
             <button onclick="setLogFilter('SYS')" id="filter-SYS" class="log-filter-btn px-2.5 py-1 rounded bg-slate-800 text-slate-300">מערכת / מודם</button>
         </div>
 
+        
+        <div id="rt-rf-diag-bar" class="bg-slate-900/90 border border-slate-800 rounded px-2 py-1 flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono text-cyan-300 shrink-0">
+            <span id="rt-rf-diag-counts">RF Logs: 0 | Total: 0 | Filter: ALL</span>
+            <span id="rt-rf-diag-last" class="text-slate-300 truncate">Last RF: waiting...</span>
+        </div>
+
         <div id="log-stream" class="flex-1 bg-slate-950 border border-slate-800 rounded-lg p-2 overflow-y-auto space-y-1.5 text-xs ltr-box font-mono"></div>
     </section>
 
@@ -1980,6 +1986,113 @@ if (window.__rtStableV41) return;
     };
     window.setLogFilter._rtRfDirectFilter = true;
   }
+})();
+</script>
+
+
+<script id="rt-rf-stream-v5-guaranteed">
+/* RT_RF_STREAM_V5_GUARANTEED */
+(function() {
+  if (window.__rtRfStreamV5Guaranteed) return;
+  window.__rtRfStreamV5Guaranteed = true;
+
+  var lastRecordedSig = "";
+  var lastRecordedAt = 0;
+
+  function formatRfSnapshot() {
+    var st = window.state || (typeof state !== "undefined" ? state : null);
+    var sc = (st && st.servingCell) ? st.servingCell : {};
+    var rf = (st && st.rf) ? st.rf : {};
+
+    var rsrp = (typeof rf.rsrp === "number" && Number.isFinite(rf.rsrp)) ? rf.rsrp.toFixed(1) + " dBm" : "--";
+    var rsrq = (typeof rf.rsrq === "number" && Number.isFinite(rf.rsrq)) ? rf.rsrq.toFixed(1) + " dB" : "--";
+    var sinr = (typeof rf.sinr === "number" && Number.isFinite(rf.sinr)) ? rf.sinr.toFixed(1) + " dB" : "--";
+
+    var tech = (sc.tech && sc.tech !== "---") ? sc.tech : ((st && st.activeRat) ? st.activeRat : "CELL");
+    var pci = (sc.pci !== undefined && sc.pci !== null && sc.pci !== "---") ? sc.pci : "--";
+    var band = (sc.band && sc.band !== "---") ? sc.band : "--";
+
+    return {
+      title: tech + " PCI:" + pci + " | " + band,
+      summary: "RSRP: " + rsrp + " | RSRQ: " + rsrq + " | SINR: " + sinr,
+      hasMetric: (typeof rf.rsrp === "number" && Number.isFinite(rf.rsrp)) || (pci !== "--")
+    };
+  }
+
+  function updateDiagBar() {
+    try {
+      var st = window.state || (typeof state !== "undefined" ? state : null);
+      var logs = (st && Array.isArray(st.logs)) ? st.logs : [];
+      var rfCount = logs.filter(function(x) { return x && x.category === "RF"; }).length;
+      var filter = (st && st.logFilter) ? st.logFilter : "ALL";
+      var snap = formatRfSnapshot();
+
+      var cEl = document.getElementById("rt-rf-diag-counts");
+      var lEl = document.getElementById("rt-rf-diag-last");
+      if (cEl) cEl.textContent = "RF: " + rfCount + " | Logs: " + logs.length + " | Filter: " + filter;
+      if (lEl) lEl.textContent = snap.title + " • " + snap.summary;
+    } catch (_e) {}
+  }
+
+  function pushRfNow(tag) {
+    try {
+      var addFn = (typeof window.addLog === "function") ? window.addLog : (typeof addLog === "function" ? addLog : null);
+      var renderFn = (typeof window.renderLogs === "function") ? window.renderLogs : (typeof renderLogs === "function" ? renderLogs : null);
+      var st = window.state || (typeof state !== "undefined" ? state : null);
+      if (!addFn || !st) return;
+
+      st.logs = Array.isArray(st.logs) ? st.logs : [];
+      var snap = formatRfSnapshot();
+      var sig = snap.title + "|" + snap.summary;
+      var now = Date.now();
+
+      if (sig !== lastRecordedSig || (now - lastRecordedAt) >= 2000) {
+        lastRecordedSig = sig;
+        lastRecordedAt = now;
+        addFn("RF", tag || "MODEM", snap.title, snap.summary);
+        if (renderFn) renderFn();
+      }
+      updateDiagBar();
+    } catch (_e) {}
+  }
+
+  setInterval(function() {
+    try {
+      var st = window.state || (typeof state !== "undefined" ? state : null);
+      var snap = formatRfSnapshot();
+      if (st && (snap.hasMetric || (st.sampleCount && st.sampleCount > 0))) {
+        pushRfNow("STREAM");
+      } else {
+        updateDiagBar();
+      }
+    } catch (_e) {}
+  }, 1200);
+
+  if (typeof window.renderLogs === "function" && !window.renderLogs._rtV5Bar) {
+    var origRender = window.renderLogs;
+    window.renderLogs = function() {
+      var r = origRender.apply(this, arguments);
+      updateDiagBar();
+      return r;
+    };
+    window.renderLogs._rtV5Bar = true;
+  }
+
+  if (typeof window.setLogFilter === "function" && !window.setLogFilter._rtV5Filter) {
+    var origSetF = window.setLogFilter;
+    window.setLogFilter = function(f) {
+      var r = origSetF.apply(this, arguments);
+      if (f === "RF") {
+        pushRfNow("FILTER_RF");
+      } else {
+        updateDiagBar();
+      }
+      return r;
+    };
+    window.setLogFilter._rtV5Filter = true;
+  }
+
+  updateDiagBar();
 })();
 </script>
 
