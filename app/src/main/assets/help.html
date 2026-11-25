@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>מרכז עזרה ותיעוד - Cellular RT Monitor v4.1</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700;900&family=JetBrains+Mono:wght@400;600;700&display=swap');
+        body {
+            font-family: 'Heebo', sans-serif;
+            background-color: #070b14;
+            color: #e2e8f0;
+        }
+        .mono {
+            font-family: 'JetBrains Mono', monospace;
+            direction: ltr;
+            display: inline-block;
+        }
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+        .phone-mockup {
+            background: linear-gradient(180deg, #0f172a 0%, #070b14 100%);
+            border: 2px solid #334155;
+            border-radius: 18px;
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.65);
+            overflow: hidden;
+        }
+        mark {
+            background-color: rgba(6, 182, 212, 0.35);
+            color: #ffffff;
+            padding: 0 2px;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <!-- Top Sticky Help Header + Dynamic Search -->
+    <header class="bg-slate-900 border-b border-slate-800 sticky top-0 z-50 px-3 py-2.5 shadow-lg">
+        <div class="max-w-4xl mx-auto flex flex-col gap-2">
+            <div class="flex items-center justify-between gap-2">
+                <div class="flex items-center gap-2">
+                    <span class="w-7 h-7 rounded-lg bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-400 font-black text-sm">?</span>
+                    <div>
+                        <h1 class="text-sm font-black text-white leading-tight">מרכז העזרה והתיעוד המלא</h1>
+                        <p class="text-[10px] text-slate-400">Cellular RT Monitor v4.1 — מדריך תפעול, אייקונים ו-Shizuku</p>
+                    </div>
+                </div>
+                <button onclick="returnToApp()" class="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold shadow">
+                    ✕ חזור לאפליקציה
+                </button>
+            </div>
+
+            <!-- Dynamic Live Search Input -->
+            <div class="relative">
+                <input type="text" id="help-search-input" oninput="filterHelpContent(this.value)"
+                    placeholder="🔍 חיפוש דינאמי במדריך... (לדוגמה: Shizuku, אתחול, RSRP, 4636, CSV, Handover, נעילת דור)"
+                    class="w-full bg-slate-950 border border-slate-700 focus:border-cyan-500 rounded-lg py-2 pr-3 pl-8 text-xs text-white placeholder-slate-500 focus:outline-none">
+                <button onclick="clearSearch()" id="btn-clear-search" class="hidden absolute left-2.5 top-2 text-slate-400 hover:text-white text-xs font-bold">✕</button>
+            </div>
+
+            <!-- Category Navigation Menu -->
+            <nav class="flex items-center gap-1.5 overflow-x-auto pb-0.5 text-[11px] font-bold">
+                <button onclick="selectCategory('all')" id="nav-all" class="nav-pill shrink-0 px-2.5 py-1 rounded-full bg-cyan-600 text-white">הכל</button>
+                <button onclick="selectCategory('shizuku-init')" id="nav-shizuku-init" class="nav-pill shrink-0 px-2.5 py-1 rounded-full bg-slate-800 text-slate-300 hover:text-white">⚡ התקנת Shizuku ראשונית</button>
+                <button onclick="selectCategory('shizuku-reboot')" id="nav-shizuku-reboot" class="nav-pill shrink-0 px-2.5 py-1 rounded-full bg-slate-800 text-slate-300 hover:text-white">🔄 הפעלה לאחר אתחול</button>
+                <button onclick="selectCategory('screens')" id="nav-screens" class="nav-pill shrink-0 px-2.5 py-1 rounded-full bg-slate-800 text-slate-300 hover:text-white">📱 מסכי האפליקציה</button>
+                <button onclick="selectCategory('icons')" id="nav-icons" class="nav-pill shrink-0 px-2.5 py-1 rounded-full bg-slate-800 text-slate-300 hover:text-white">🏷️ מילון אייקונים וכפתורים</button>
+                <button onclick="selectCategory('rf-metrics')" id="nav-rf-metrics" class="nav-pill shrink-0 px-2.5 py-1 rounded-full bg-slate-800 text-slate-300 hover:text-white">📡 מדדי RF וניתוח AI</button>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Search Empty State -->
+    <div id="search-empty-state" class="hidden max-w-4xl mx-auto p-8 text-center">
+        <div class="text-3xl mb-2">🔍</div>
+        <h3 class="text-sm font-bold text-white mb-1">לא נמצאו תוצאות תואמות לחיפוש</h3>
+        <p class="text-xs text-slate-400 mb-3">נסה מילת מפתח אחרת כגון: Shizuku, Pairing, אתחול, RSRP, אייקונים או ייצוא.</p>
+        <button onclick="clearSearch()" class="px-3 py-1.5 rounded bg-cyan-600 text-white text-xs font-bold">הצג את כל המדריך</button>
+    </div>
+
+    <!-- Main Documentation Content -->
+    <main id="help-sections-container" class="flex-1 max-w-4xl w-full mx-auto p-3 space-y-4">
+
+        <!-- =================================================================== -->
+        <!-- SECTION 1: SHIZUKU FIRST-TIME INSTALLATION & ONE-TIME CONFIGURATION -->
+        <!-- =================================================================== -->
+        <section data-category="shizuku-init" class="help-card bg-slate-900 border border-cyan-500/40 rounded-xl p-4 shadow-lg">
+            <div class="flex items-center gap-2 mb-2">
+                <span class="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 text-xs font-black">מדריך חובה • חד-פעמי</span>
+                <h2 class="text-base font-black text-white">1. התקנת Shizuku והגדרות ראשוניות (פעם אחת בלבד)</h2>
+            </div>
+            <p class="text-xs text-slate-300 leading-relaxed mb-3">
+                מערכת ההפעלה אנדרואיד חוסמת אפליקציות רגילות מלשנות הגדרות מודם (כגון נעילת דור <strong>5G / 4G / 3G / 2G</strong> או הפעלת <strong>מצב טיסה</strong>) ללא הרשאות מערכת. שירות <strong>Shizuku</strong> מעניק לאפליקציה הרשאות ברמת <span class="mono text-cyan-300">ADB Shell</span> באופן בטוח וללא צורך בפריצת Root. את השלבים הבאים מבצעים <strong>פעם אחת בלבד</strong> בהתקנה הראשונה:
+            </p>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                <div class="space-y-2.5 text-xs">
+                    <div class="bg-slate-950 border border-slate-800 rounded-lg p-3">
+                        <div class="font-bold text-cyan-400 mb-1">שלב א׳: התקנת Shizuku וחיבור ל-Wi-Fi</div>
+                        <ol class="list-decimal list-inside space-y-1 text-slate-300">
+                            <li>התקן את אפליקציית <strong>Shizuku</strong> מחנות Google Play (מאת <em>RikkaApps</em>).</li>
+                            <li>חבר את המכשיר לרשת <strong>Wi-Fi פעילה</strong> (חובה לצורך הפעלת ניפוי שגיאות אלחוטי).</li>
+                        </ol>
+                    </div>
+
+                    <div class="bg-slate-950 border border-slate-800 rounded-lg p-3">
+                        <div class="font-bold text-cyan-400 mb-1">שלב ב׳: פתיחת אפשרויות מפתחים (Developer Options)</div>
+                        <ol class="list-decimal list-inside space-y-1 text-slate-300">
+                            <li>היכנס ב-<strong>Settings (הגדרות)</strong> אל <strong>About phone (אודות הטלפון)</strong>.</li>
+                            <li>לחץ <strong>7 פעמים ברצף</strong> על <strong>Build number</strong> (במכשירי Xiaomi/MIUI/HyperOS לחץ 7 פעמים על <strong>OS version / MIUI version</strong>) עד להופעת ההודעה <em>"You are now a developer!"</em>.</li>
+                        </ol>
+                    </div>
+
+                    <div class="bg-slate-950 border border-slate-800 rounded-lg p-3">
+                        <div class="font-bold text-amber-400 mb-1">שלב ג׳: הגדרות אבטחה מיוחדות (חשוב ב-Xiaomi / POCO / Redmi)</div>
+                        <p class="text-slate-300 leading-relaxed">
+                            היכנס אל <strong>Settings ➔ Additional settings ➔ Developer options</strong> והפעל את 3 המתגים הבאים:
+                        </p>
+                        <ul class="list-disc list-inside mt-1 space-y-1 text-slate-200">
+                            <li><strong>USB debugging</strong> (ניפוי שגיאות USB).</li>
+                            <li><strong>Wireless debugging</strong> (ניפוי שגיאות אלחוטי).</li>
+                            <li><strong>USB debugging (Security settings)</strong> — מתג חובה במכשירי שיאומי כדי לאפשר שינוי הגדרות רדיו מרחוק.</li>
+                        </ul>
+                    </div>
+
+                    <div class="bg-slate-950 border border-slate-800 rounded-lg p-3">
+                        <div class="font-bold text-emerald-400 mb-1">שלב ד׳: צימוד ראשוני (Pairing) והענקת הרשאה</div>
+                        <ol class="list-decimal list-inside space-y-1 text-slate-300">
+                            <li>פתח את <strong>Shizuku</strong> ולחץ על <strong>Pairing</strong> תחת <em>Start via Wireless debugging</em>.</li>
+                            <li>היכנס למסך <strong>Wireless debugging</strong> ולחץ על <strong>Pair device with pairing code</strong> — יופיע <strong>קוד בן 6 ספרות</strong>.</li>
+                            <li>משוך מטה את וילון ההתראות, לחץ על התראת Shizuku והקלד את הקוד בן 6 הספרות.</li>
+                            <li>חזור לאפליקציית <strong>Shizuku</strong> ולחץ על <strong>Start</strong> עד שיופיע <strong>Shizuku is running</strong>.</li>
+                            <li>פתח את <strong>Cellular RT Monitor</strong> ואשר בחלונית שתקפוץ <strong>Allow all the time</strong>.</li>
+                        </ol>
+                    </div>
+                </div>
+
+                <!-- Visual Mockup Screenshot of Shizuku Pairing Flow -->
+                <div class="phone-mockup p-3 flex flex-col justify-between text-xs">
+                    <div>
+                        <div class="flex items-center justify-between border-b border-slate-800 pb-2 mb-2">
+                            <span class="font-bold text-indigo-400">תצוגה לדוגמה: מסך Shizuku & Pairing</span>
+                            <span class="text-[10px] text-slate-500 mono">Android 13/14/15</span>
+                        </div>
+                        <div class="bg-slate-900 border border-emerald-500/40 rounded-lg p-2.5 mb-2.5">
+                            <div class="flex items-center gap-2">
+                                <span class="w-3 h-3 rounded-full bg-emerald-400"></span>
+                                <span class="font-bold text-emerald-300">Shizuku is running</span>
+                            </div>
+                            <div class="text-[10px] text-slate-400 mt-1 mono">service version 13.5 • adb (shell, uid 2000)</div>
+                        </div>
+
+                        <div class="bg-slate-900 border border-slate-800 rounded-lg p-2.5 mb-2.5">
+                            <div class="text-[11px] font-bold text-white mb-1">Start via Wireless debugging</div>
+                            <div class="flex gap-2">
+                                <span class="px-2.5 py-1 rounded bg-slate-800 text-slate-300 text-[10px] font-bold border border-slate-700">1. Pairing (חד-פעמי)</span>
+                                <span class="px-2.5 py-1 rounded bg-indigo-600 text-white text-[10px] font-bold">2. Start ▶</span>
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-950 border border-cyan-500/40 rounded-lg p-2.5">
+                            <div class="text-[11px] font-bold text-cyan-300 mb-1">התראת צימוד בוילון ההתראות:</div>
+                            <div class="bg-slate-900 p-2 rounded border border-slate-700 flex items-center justify-between">
+                                <span class="text-[10px] text-slate-300">Enter pairing code:</span>
+                                <span class="mono font-black text-sm text-amber-400 tracking-widest">482910</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-3 pt-2 border-t border-slate-800 text-[10px] text-slate-400">
+                        💡 <strong>טיפ אבטחה:</strong> לאחר ש-Shizuku מופעל ורץ, מומלץ לכבות את מתג ה-Wireless debugging. השירות ימשיך לעבוד ברקע ללא הפרעה.
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- =================================================================== -->
+        <!-- SECTION 2: POST-REBOOT SHIZUKU ACTIVATION                           -->
+        <!-- =================================================================== -->
+        <section data-category="shizuku-reboot" class="help-card bg-slate-900 border border-amber-500/40 rounded-xl p-4 shadow-lg">
+            <div class="flex items-center gap-2 mb-2">
+                <span class="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs font-black">לאחר כיבוי / אתחול מכשיר</span>
+                <h2 class="text-base font-black text-white">2. הפעלת הממשק מול Shizuku לאחר הפעלה מחדש (Restart)</h2>
+            </div>
+            <p class="text-xs text-slate-300 leading-relaxed mb-3">
+                מכיוון ששירות Shizuku רץ בזיכרון העבודה (RAM) של המכשיר, <strong>כל אתחול (Restart) או כיבוי והדלקה של הטלפון עוצר את השירות</strong>. בפתיחת האפליקציה לאחר אתחול, תופיע אוטומטית חלונית התראה עם קיצורי דרך מהירים. <strong>אין צורך לבצע שוב צימוד (Pairing) או להזין קוד!</strong> בצע רק את 4 הפעולות המהירות הבאות (כ-10 שניות):
+            </p>
+
+            <div class="grid grid-cols-1 sm:grid-cols-4 gap-2 text-xs">
+                <div class="bg-slate-950 border border-slate-800 rounded-lg p-2.5">
+                    <div class="text-amber-400 font-black mb-1">1. חיבור ל-Wi-Fi</div>
+                    <p class="text-slate-300">וודא שהטלפון מחובר לרשת Wi-Fi (או נקודה חמה מטלפון אחר) למשך ההפעלה.</p>
+                </div>
+                <div class="bg-slate-950 border border-slate-800 rounded-lg p-2.5">
+                    <div class="text-cyan-400 font-black mb-1">2. הדלקת Wireless Debugging</div>
+                    <p class="text-slate-300">לחץ באפליקציה על <strong>⚙️ פתח Developer Options</strong> והדלק את המתג <strong>Wireless debugging</strong>.</p>
+                </div>
+                <div class="bg-slate-950 border border-slate-800 rounded-lg p-2.5">
+                    <div class="text-indigo-400 font-black mb-1">3. לחיצה על Start</div>
+                    <p class="text-slate-300">לחץ על <strong>🚀 פתח אפליקציית Shizuku</strong> ולחץ מיד על הכפתור <strong>Start</strong>.</p>
+                </div>
+                <div class="bg-slate-950 border border-slate-800 rounded-lg p-2.5">
+                    <div class="text-emerald-400 font-black mb-1">4. חזרה וניתוק Wi-Fi</div>
+                    <p class="text-slate-300">חזור לאפליקציה — הכפתור למעלה יהפוך לירוק (<strong>⚡ Shizuku פעיל</strong>). כעת ניתן לכבות Wi-Fi.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- =================================================================== -->
+        <!-- SECTION 3: VISUAL SCREENSHOTS & APPLICATION TABS OVERVIEW           -->
+        <!-- =================================================================== -->
+        <section data-category="screens" class="help-card bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-lg">
+            <h2 class="text-base font-black text-white mb-1">3. הכרת מסכי האפליקציה (תצוגות מסך מפורטות)</h2>
+            <p class="text-xs text-slate-400 mb-3">האפליקציה מחולקת ל-4 לשוניות עיקריות בסרגל העליון, כך שכל המידע נגיש ללא צורך בגלילה מיותרת:</p>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                <!-- Mockup Screen 1: Live Telemetry -->
+                <div class="phone-mockup p-3">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="font-bold text-cyan-400">מסך 1: 📡 נתונים חיים (Single-Screen)</span>
+                        <span class="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px] mono">REAL MODEM</span>
+                    </div>
+                    <!-- Mini visual representation -->
+                    <div class="bg-slate-950 border border-slate-800 rounded p-2 space-y-1.5 mb-2">
+                        <div class="flex justify-between text-[10px] bg-slate-900 p-1 rounded">
+                            <span class="text-cyan-400 font-bold">[Auto] [5G] [4G] [3G] [2G]</span>
+                            <span class="text-amber-300">✈️ טיסה: כבוי</span>
+                        </div>
+                        <div class="grid grid-cols-4 gap-1 text-[9px] text-center mono">
+                            <div class="bg-slate-900 p-1 rounded"><div class="text-slate-500">PCI</div><div class="text-cyan-400 font-bold">142</div></div>
+                            <div class="bg-slate-900 p-1 rounded"><div class="text-slate-500">eNB</div><div class="text-white font-bold">40891</div></div>
+                            <div class="bg-slate-900 p-1 rounded"><div class="text-slate-500">ARFCN</div><div class="text-white font-bold">1300</div></div>
+                            <div class="bg-slate-900 p-1 rounded"><div class="text-slate-500">TAC</div><div class="text-white font-bold">3104</div></div>
+                        </div>
+                        <div class="grid grid-cols-4 gap-1 text-[9px] text-center mono">
+                            <div class="bg-slate-900 p-1 rounded text-emerald-400 font-bold">RSRP -84</div>
+                            <div class="bg-slate-900 p-1 rounded text-cyan-400 font-bold">RSRQ -10</div>
+                            <div class="bg-slate-900 p-1 rounded text-indigo-400 font-bold">SINR 18.4</div>
+                            <div class="bg-slate-900 p-1 rounded text-amber-400 font-bold">RSSI -58</div>
+                        </div>
+                        <div class="h-8 bg-slate-900 rounded flex items-center justify-center text-[9px] text-slate-400 border border-slate-800">
+                            📈 גרף זמן-אמת (RSRP / RSSI / SINR) + טבלת שכנים
+                        </div>
+                    </div>
+                    <p class="text-slate-300 leading-relaxed">
+                        מציג את כל נתוני התא המשרת והאנטנות השכנות במסך אחד ללא גלילה, כולל שליטה ישירה על נעילת הדור והפעלת מצב טיסה.
+                    </p>
+                </div>
+
+                <!-- Mockup Screen 2: Logs, Export & Import -->
+                <div class="phone-mockup p-3">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="font-bold text-emerald-400">מסך 2: 📜 לוג וייצוא / טעינת קבצים</span>
+                        <span class="text-[10px] text-slate-400">CSV / JSON</span>
+                    </div>
+                    <div class="bg-slate-950 border border-slate-800 rounded p-2 space-y-1.5 mb-2">
+                        <div class="flex justify-between text-[9px]">
+                            <span class="px-1.5 py-0.5 bg-cyan-600 text-white rounded font-bold">⬇ ייצוא CSV / JSON</span>
+                            <span class="px-1.5 py-0.5 bg-emerald-600/30 text-emerald-300 rounded font-bold">📂 טען קובץ Log</span>
+                        </div>
+                        <div class="text-[9px] mono space-y-1 bg-slate-900 p-1.5 rounded text-slate-300">
+                            <div>[14:22:01] <span class="text-cyan-400 font-bold">[HO #1]</span> PCI 142 ➔ PCI 304</div>
+                            <div>[14:22:02] <span class="text-emerald-400">[RF]</span> 4G LTE B3 RSRP:-84 SINR:18</div>
+                        </div>
+                    </div>
+                    <p class="text-slate-300 leading-relaxed">
+                        תיעוד כרונולוגי חי של כל דגימות הקליטה ומעברי התאים (Handovers), שמירה לתיקיית <span class="mono">Downloads</span> וטעינת קבצי לוג היסטוריים לצפייה וניתוח.
+                    </p>
+                </div>
+
+                <!-- Mockup Screen 3: Analytics & Histograms -->
+                <div class="phone-mockup p-3">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="font-bold text-amber-400">מסך 3: 📊 ניתוח וגרפים (Analytics)</span>
+                        <span class="text-[10px] text-slate-400">היסטוגרמות ומסקנות</span>
+                    </div>
+                    <div class="bg-slate-950 border border-slate-800 rounded p-2 space-y-1.5 mb-2">
+                        <div class="flex items-end gap-1 h-10 px-2 pt-2 bg-slate-900 rounded">
+                            <div class="flex-1 bg-emerald-500 h-4 rounded-t"></div>
+                            <div class="flex-1 bg-emerald-400 h-7 rounded-t"></div>
+                            <div class="flex-1 bg-sky-400 h-5 rounded-t"></div>
+                            <div class="flex-1 bg-amber-400 h-2 rounded-t"></div>
+                            <div class="flex-1 bg-rose-500 h-1 rounded-t"></div>
+                        </div>
+                        <div class="text-[9px] text-cyan-300 bg-slate-900 p-1 rounded">
+                            📋 מסקנה: עוצמת קליטה מצוינת (-84.2 dBm), יציבות תאים תקינה.
+                        </div>
+                    </div>
+                    <p class="text-slate-300 leading-relaxed">
+                        מחשב סטטיסטיקות מלאות (ממוצע, מינימום ומקסימום), מפיק היסטוגרמת התפלגות עוצמת אות וגרף אחוזי שהייה בכל אנטנה (PCI), ומסכם מסקנות הנדסיות אוטומטיות.
+                    </p>
+                </div>
+
+                <!-- Mockup Screen 4: AI Smart Log Analyzer -->
+                <div class="phone-mockup p-3">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="font-bold text-indigo-400">מסך 4: 🤖 ניתוח חכם באמצעות AI</span>
+                        <span class="text-[10px] text-slate-400">Gemini / ChatGPT</span>
+                    </div>
+                    <div class="bg-slate-950 border border-slate-800 rounded p-2 space-y-1.5 mb-2">
+                        <div class="text-[9px] bg-slate-900 p-1 rounded text-slate-300">
+                            ✍️ פרומפט חופשי + הזרקה אוטומטית של נתוני הלוג וה-Handovers
+                        </div>
+                        <div class="flex gap-1 text-[9px]">
+                            <span class="flex-1 text-center py-1 bg-indigo-600 text-white rounded font-bold">✨ נתח באפליקציה</span>
+                            <span class="flex-1 text-center py-1 bg-emerald-600 text-white rounded font-bold">📋 העתק ל-AI</span>
+                        </div>
+                    </div>
+                    <p class="text-slate-300 leading-relaxed">
+                        מאפשר לשאול כל שאלה בשפה חופשית על הלוג החי או המיובא. האפליקציה אורזת את נתוני הרדיו יחד עם השאלה ומפיקה ניתוח מומחה.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- =================================================================== -->
+        <!-- SECTION 4: COMPLETE ICON & BUTTON GLOSSARY                          -->
+        <!-- =================================================================== -->
+        <section data-category="icons" class="help-card bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-lg">
+            <h2 class="text-base font-black text-white mb-1">4. מילון אייקונים, כפתורים וחיוויים מלא</h2>
+            <p class="text-xs text-slate-400 mb-3">פירוט המשמעות והפעולה של כל סמל וכפתור בממשק האפליקציה:</p>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                <div class="flex items-start gap-2.5 bg-slate-950 border border-slate-800 rounded-lg p-2.5">
+                    <span class="text-base shrink-0">⚡</span>
+                    <div>
+                        <div class="font-bold text-white">סטטוס Shizuku (ירוק / כתום)</div>
+                        <p class="text-slate-400">מציין האם גשר ההרשאות של Shizuku פעיל. לחיצה עליו פותחת את מדריך ההפעלה המהיר וקיצורי הדרך.</p>
+                    </div>
+                </div>
+
+                <div class="flex items-start gap-2.5 bg-slate-950 border border-slate-800 rounded-lg p-2.5">
+                    <span class="text-base shrink-0">📱</span>
+                    <div>
+                        <div class="font-bold text-white">כפתור 4636 (תפריט הנדסה)</div>
+                        <p class="text-slate-400">מציג את קוד החייגן הסודי של אנדרואיד (<span class="mono text-emerald-400">*#*#4636#*#*</span>) עם כפתור העתקה מהירה כגיבוי ידני.</p>
+                    </div>
+                </div>
+
+                <div class="flex items-start gap-2.5 bg-slate-950 border border-slate-800 rounded-lg p-2.5">
+                    <span class="text-base shrink-0">❓</span>
+                    <div>
+                        <div class="font-bold text-white">כפתור עזרה (Help Center)</div>
+                        <p class="text-slate-400">פותח חלון תיעוד זה הכולל חיפוש דינאמי, תצוגות מסך והוראות הפעלה.</p>
+                    </div>
+                </div>
+
+                <div class="flex items-start gap-2.5 bg-slate-950 border border-slate-800 rounded-lg p-2.5">
+                    <span class="text-base shrink-0">📡</span>
+                    <div>
+                        <div class="font-bold text-white">לשונית נתונים חיים + נקודת LIVE</div>
+                        <p class="text-slate-400">נקודה ירוקה מהבהבת (<span class="mono text-emerald-400">REAL MODEM</span>) מאשרת קבלת נתונים בזמן אמת מחומרת המודם.</p>
+                    </div>
+                </div>
+
+                <div class="flex items-start gap-2.5 bg-slate-950 border border-slate-800 rounded-lg p-2.5">
+                    <span class="text-base shrink-0">🔒</span>
+                    <div>
+                        <div class="font-bold text-white">כפתורי נעילת דור (Auto / 5G / 4G / 3G / 2G)</div>
+                        <p class="text-slate-400">נועלים את המודם על דור סלולרי ספציפי בלבד (דורש Shizuku פעיל). <strong>Auto</strong> מחזיר לבחירה אוטומטית.</p>
+                    </div>
+                </div>
+
+                <div class="flex items-start gap-2.5 bg-slate-950 border border-slate-800 rounded-lg p-2.5">
+                    <span class="text-base shrink-0">✈️</span>
+                    <div>
+                        <div class="font-bold text-white">מתג מצב טיסה (Airplane Mode)</div>
+                        <p class="text-slate-400">מכבה ומדליק את מקמ"ש הרדיו במכשיר כדי לאלץ סריקה מחודשת והתחברות לאנטנה הקרובה ביותר.</p>
+                    </div>
+                </div>
+
+                <div class="flex items-start gap-2.5 bg-slate-950 border border-slate-800 rounded-lg p-2.5">
+                    <span class="text-base shrink-0">⬇</span>
+                    <div>
+                        <div class="font-bold text-white">כפתורי ייצוא (CSV / JSON)</div>
+                        <p class="text-slate-400">שומרים את כל הדגימות ואירועי מעברי התאים לקובץ בתיקיית <strong>Downloads</strong> בטלפון.</p>
+                    </div>
+                </div>
+
+                <div class="flex items-start gap-2.5 bg-slate-950 border border-slate-800 rounded-lg p-2.5">
+                    <span class="text-base shrink-0">📂</span>
+                    <div>
+                        <div class="font-bold text-white">כפתור טעינת קובץ Log</div>
+                        <p class="text-slate-400">פותח את סייר הקבצים של המכשיר לטעינת קובץ CSV או JSON שמור לצורך צפייה וניתוח.</p>
+                    </div>
+                </div>
+
+                <div class="flex items-start gap-2.5 bg-slate-950 border border-slate-800 rounded-lg p-2.5">
+                    <span class="text-base shrink-0">📊</span>
+                    <div>
+                        <div class="font-bold text-white">לשונית ניתוח וגרפים</div>
+                        <p class="text-slate-400">מציגה היסטוגרמות התפלגות אות, אחוזי חיבור לכל תא ומסקנות אוטומטיות על איכות הרשת.</p>
+                    </div>
+                </div>
+
+                <div class="flex items-start gap-2.5 bg-slate-950 border border-slate-800 rounded-lg p-2.5">
+                    <span class="text-base shrink-0">🤖</span>
+                    <div>
+                        <div class="font-bold text-white">לשונית ניתוח AI</div>
+                        <p class="text-slate-400">משלבת פרומפט חופשי עם נתוני הלוג להפקת אבחון מעמיק באמצעות בינה מלאכותית.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- =================================================================== -->
+        <!-- SECTION 5: RF PARAMETERS & TELECOM METRICS GLOSSARY                 -->
+        <!-- =================================================================== -->
+        <section data-category="rf-metrics" class="help-card bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-lg">
+            <h2 class="text-base font-black text-white mb-1">5. הסבר מדדי הרדיו (RF KPIs) וזיהוי התאים</h2>
+            <p class="text-xs text-slate-400 mb-3">מדריך מקוצר לפענוח הערכים המופיעים במסך הראשי ובדוחות הניתוח:</p>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-xs text-right border border-slate-800 rounded-lg overflow-hidden">
+                    <thead class="bg-slate-950 text-cyan-400 border-b border-slate-800">
+                        <tr>
+                            <th class="py-2 px-2.5">מדד</th>
+                            <th class="py-2 px-2.5">משמעות הנדסית</th>
+                            <th class="py-2 px-2.5">ערכים תקינים / מצוינים</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-800 text-slate-300">
+                        <tr>
+                            <td class="py-2 px-2.5 font-bold text-emerald-400 mono">RSRP / RSCP</td>
+                            <td class="py-2 px-2.5">עוצמת האות הנקלט מהאנטנה המשרתת (4G/5G RSRP, 3G RSCP).</td>
+                            <td class="py-2 px-2.5 mono">-65 עד -90 dBm (מעל -105 חלש)</td>
+                        </tr>
+                        <tr>
+                            <td class="py-2 px-2.5 font-bold text-cyan-400 mono">RSRQ / Ec/No</td>
+                            <td class="py-2 px-2.5">איכות האות הנקלט ביחס לעומס ולרעש בתדר.</td>
+                            <td class="py-2 px-2.5 mono">-3 עד -11 dB (מתחת ל- -15 עמוס)</td>
+                        </tr>
+                        <tr>
+                            <td class="py-2 px-2.5 font-bold text-indigo-400 mono">SINR</td>
+                            <td class="py-2 px-2.5">יחס אות לרעש והפרעות — קובע ישירות את מהירות הגלישה.</td>
+                            <td class="py-2 px-2.5 mono">מעל +13 dB (מתחת ל-0 הפרעות)</td>
+                        </tr>
+                        <tr>
+                            <td class="py-2 px-2.5 font-bold text-amber-400 mono">PCI / PSC</td>
+                            <td class="py-2 px-2.5">מזהה הפיזי של סקטור האנטנה (0–503 ב-LTE, 0–1007 ב-5G).</td>
+                            <td class="py-2 px-2.5">שינוי ב-PCI מעיד על Handover</td>
+                        </tr>
+                        <tr>
+                            <td class="py-2 px-2.5 font-bold text-white mono">eNB / gNB ID</td>
+                            <td class="py-2 px-2.5">המספר המזהה של אתר השידור (תחנת הבסיס הפיזית).</td>
+                            <td class="py-2 px-2.5">מזהה את המיקום הגיאוגרפי של האתר</td>
+                        </tr>
+                        <tr>
+                            <td class="py-2 px-2.5 font-bold text-white mono">ARFCN</td>
+                            <td class="py-2 px-2.5">מספר ערוץ התדר המדויק שעליו משדרת האנטנה.</td>
+                            <td class="py-2 px-2.5">קובע את תחום התדר (Band)</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        let currentCategory = 'all';
+
+        function returnToApp() {
+            if (window.AndroidModem && window.AndroidModem.closeHelpCenter) {
+                window.AndroidModem.closeHelpCenter();
+            } else {
+                window.location.href = 'index.html';
+            }
+        }
+
+        function selectCategory(cat) {
+            currentCategory = cat;
+            document.querySelectorAll('.nav-pill').forEach(btn => {
+                btn.className = 'nav-pill shrink-0 px-2.5 py-1 rounded-full bg-slate-800 text-slate-300 hover:text-white';
+            });
+            document.getElementById('nav-' + cat).className = 'nav-pill shrink-0 px-2.5 py-1 rounded-full bg-cyan-600 text-white';
+            filterHelpContent(document.getElementById('help-search-input').value);
+        }
+
+        function clearSearch() {
+            const input = document.getElementById('help-search-input');
+            input.value = '';
+            document.getElementById('btn-clear-search').classList.add('hidden');
+            filterHelpContent('');
+        }
+
+        function filterHelpContent(query) {
+            const q = (query || '').trim().toLowerCase();
+            const clearBtn = document.getElementById('btn-clear-search');
+            if (q.length > 0) clearBtn.classList.remove('hidden');
+            else clearBtn.classList.add('hidden');
+
+            const cards = document.querySelectorAll('.help-card');
+            let visibleCount = 0;
+
+            cards.forEach(card => {
+                const cat = card.getAttribute('data-category');
+                const matchesCat = (currentCategory === 'all' || cat === currentCategory);
+                const text = card.innerText.toLowerCase();
+                const matchesQuery = (q === '' || text.includes(q));
+
+                if (matchesCat && matchesQuery) {
+                    card.classList.remove('hidden');
+                    visibleCount++;
+                } else {
+                    card.classList.add('hidden');
+                }
+            });
+
+            const emptyState = document.getElementById('search-empty-state');
+            if (visibleCount === 0) {
+                emptyState.classList.remove('hidden');
+            } else {
+                emptyState.classList.add('hidden');
+            }
+        }
+    </script>
+</body>
+</html>
