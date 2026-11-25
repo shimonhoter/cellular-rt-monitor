@@ -1859,5 +1859,44 @@ if (window.__rtStableV41) return;
 })();
 </script>
 
+
+<script id="rt-expose-window-log-fns-v3">
+/* RT_EXPOSE_WINDOW_LOG_FNS_V3 */
+(function() {
+  if (window.__rtExposeWindowLogFnsV3) return;
+  window.__rtExposeWindowLogFnsV3 = true;
+
+  if (typeof addLog === "function") {
+    window.addLog = addLog;
+  }
+  if (typeof renderLogs === "function") {
+    window.renderLogs = renderLogs;
+  }
+  if (typeof setLogFilter === "function" && !window.setLogFilter._rtWrap) {
+    var origSetFilter = setLogFilter;
+    window.setLogFilter = function(f) {
+      var r = origSetFilter.apply(this, arguments);
+      try {
+        if (f === "RF" && typeof window.addLog === "function" && window.state && Array.isArray(window.state.logs)) {
+          var hasRf = window.state.logs.some(function(x) { return x && x.category === "RF"; });
+          if (!hasRf) {
+            var sc = window.state.servingCell || {};
+            var rf = window.state.rf || {};
+            var rsrp = (typeof rf.rsrp === "number") ? rf.rsrp.toFixed(1) + " dBm" : "--";
+            var rsrq = (typeof rf.rsrq === "number") ? rf.rsrq.toFixed(1) + " dB" : "--";
+            var sinr = (typeof rf.sinr === "number") ? rf.sinr.toFixed(1) + " dB" : "--";
+            var title = (sc.tech || window.state.activeRat || "CELL") + " PCI:" + (sc.pci ?? "--") + " | " + (sc.band || "---");
+            window.addLog("RF", "MODEM", title, "RSRP: " + rsrp + " | RSRQ: " + rsrq + " | SINR: " + sinr);
+            if (typeof window.renderLogs === "function") window.renderLogs();
+          }
+        }
+      } catch (_e) {}
+      return r;
+    };
+    window.setLogFilter._rtWrap = true;
+  }
+})();
+</script>
+
 </body>
 </html>
