@@ -231,8 +231,37 @@ class MainActivity : AppCompatActivity() {
         }
 
         @JavascriptInterface
+        fun setAllowedGenerations(csv: String) {
+            val gens = csv.split(",").map { it.trim() }.filter { it in setOf("2G", "3G", "4G", "5G") }.toSet()
+            if (gens.isEmpty()) return
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                Thread { modemController.setRealAllowedGenerations(gens) }.start()
+            } else {
+                modemController.openDeviceNetworkSettings()
+            }
+        }
+
+        @JavascriptInterface
         fun setAirplaneMode(enable: Boolean) {
-            modemController.setRealAirplaneMode(enable)
+            Thread {
+                modemController.setRealAirplaneMode(enable)
+                // report the real resulting state back to the UI
+                pollingHandler.postDelayed({ pushAirplaneState() }, 1500)
+            }.start()
+        }
+
+        @JavascriptInterface
+        fun getAirplaneMode(): Boolean = modemController.isAirplaneModeOn()
+
+        @JavascriptInterface
+        fun openUrl(url: String) {
+            if (!url.startsWith("http://documents.sviva.gov.il/") && !url.startsWith("https://documents.sviva.gov.il/")) return
+            runOnUiThread {
+                try {
+                    startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                } catch (_: Exception) {
+                }
+            }
         }
 
         @JavascriptInterface
@@ -339,7 +368,45 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun pushAirplaneState() {
+        if (!::webView.isInitialized) return
+        val on = modemController.isAirplaneModeOn()
+        webView.evaluateJavascript("window.onAirplaneState && window.onAirplaneState($on)", null)
+    }
+
+    private var locationListener: android.location.LocationListener? = null
+
+    @SuppressLint("MissingPermission")
+    private fun startLocationUpdates() {
+        if (locationListener != null) return
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) return
+        val lm = getSystemService(LOCATION_SERVICE) as android.location.LocationManager
+        val listener = object : android.location.LocationListener {
+            override fun onLocationChanged(loc: android.location.Location) {
+                webView.evaluateJavascript(
+                    "window.onRealLocation && window.onRealLocation(${loc.latitude}, ${loc.longitude}, ${loc.accuracy})", null
+                )
+            }
+            @Deprecated("Deprecated in Java")
+            override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
+            override fun onProviderEnabled(provider: String) {}
+            override fun onProviderDisabled(provider: String) {}
+        }
+        locationListener = listener
+        try {
+            for (provider in listOf(android.location.LocationManager.GPS_PROVIDER, android.location.LocationManager.NETWORK_PROVIDER)) {
+                if (lm.isProviderEnabled(provider)) {
+                    lm.requestLocationUpdates(provider, 1000L, 0f, listener, android.os.Looper.getMainLooper())
+                    lm.getLastKnownLocation(provider)?.let { listener.onLocationChanged(it) }
+                }
+            }
+        } catch (_: Exception) {
+        }
+    }
+
     private fun startRealModemStream() {
+        startLocationUpdates()
+        pushAirplaneState()
         telemetryEngine.startListening()
         val pollRunnable = object : Runnable {
             override fun run() {
@@ -379,5 +446,6 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
         Shizuku.removeRequestPermissionResultListener(shizukuPermissionListener)
         pollingHandler.removeCallbacksAndMessages(null)
+        locationListener?.let { (getSystemService(LOCATION_SERVICE) as android.location.LocationManager).removeUpdates(it) }
     }
 }

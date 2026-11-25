@@ -74,31 +74,45 @@ class RealModemController(private val context: Context) {
     // [END: ShizukuHelpers]
 
     // [START: NetworkTypeLock]
+    /** Single-generation / AUTO convenience wrapper (kept for older callers). */
     @RequiresApi(Build.VERSION_CODES.S)
     fun setRealNetworkTypeLock(ratMode: String) {
-        val networkTypeBitmask: Long = when (ratMode) {
-            "5G" -> TelephonyManager.NETWORK_TYPE_BITMASK_NR
-            "4G" -> TelephonyManager.NETWORK_TYPE_BITMASK_LTE
-            "3G" -> (TelephonyManager.NETWORK_TYPE_BITMASK_UMTS or
-                     TelephonyManager.NETWORK_TYPE_BITMASK_HSDPA or
-                     TelephonyManager.NETWORK_TYPE_BITMASK_HSUPA or
-                     TelephonyManager.NETWORK_TYPE_BITMASK_HSPA or
-                     TelephonyManager.NETWORK_TYPE_BITMASK_HSPAP)
-            "2G" -> (TelephonyManager.NETWORK_TYPE_BITMASK_GSM or
-                     TelephonyManager.NETWORK_TYPE_BITMASK_GPRS or
-                     TelephonyManager.NETWORK_TYPE_BITMASK_EDGE)
-            else -> (TelephonyManager.NETWORK_TYPE_BITMASK_NR or
-                     TelephonyManager.NETWORK_TYPE_BITMASK_LTE or
-                     TelephonyManager.NETWORK_TYPE_BITMASK_UMTS or
-                     TelephonyManager.NETWORK_TYPE_BITMASK_GSM)
-        }
+        setRealAllowedGenerations(if (ratMode == "AUTO") setOf("2G", "3G", "4G", "5G") else setOf(ratMode))
+    }
 
-        val legacyNetworkMode: Int = when (ratMode) {
-            "5G" -> 23   // NR_ONLY
-            "4G" -> 11   // LTE_ONLY
-            "3G" -> 2    // WCDMA_ONLY
-            "2G" -> 1    // GSM_ONLY
-            else -> 26   // NR_LTE_TDSCDMA_CDMA_EVDO_GSM_WCDMA (Auto 5G/4G/3G/2G)
+    /** Allow exactly the given generations ("2G","3G","4G","5G"); all four = no lock. */
+    @RequiresApi(Build.VERSION_CODES.S)
+    fun setRealAllowedGenerations(gens: Set<String>) {
+        val ratMode = if (gens.size >= 4) "AUTO" else gens.sorted().joinToString("+")
+        var networkTypeBitmask = 0L
+        if ("5G" in gens) networkTypeBitmask = networkTypeBitmask or TelephonyManager.NETWORK_TYPE_BITMASK_NR
+        if ("4G" in gens) networkTypeBitmask = networkTypeBitmask or TelephonyManager.NETWORK_TYPE_BITMASK_LTE or
+                TelephonyManager.NETWORK_TYPE_BITMASK_LTE_CA
+        if ("3G" in gens) networkTypeBitmask = networkTypeBitmask or
+                TelephonyManager.NETWORK_TYPE_BITMASK_UMTS or
+                TelephonyManager.NETWORK_TYPE_BITMASK_HSDPA or
+                TelephonyManager.NETWORK_TYPE_BITMASK_HSUPA or
+                TelephonyManager.NETWORK_TYPE_BITMASK_HSPA or
+                TelephonyManager.NETWORK_TYPE_BITMASK_HSPAP or
+                TelephonyManager.NETWORK_TYPE_BITMASK_TD_SCDMA
+        if ("2G" in gens) networkTypeBitmask = networkTypeBitmask or
+                TelephonyManager.NETWORK_TYPE_BITMASK_GSM or
+                TelephonyManager.NETWORK_TYPE_BITMASK_GPRS or
+                TelephonyManager.NETWORK_TYPE_BITMASK_EDGE
+        if (networkTypeBitmask == 0L) return
+
+        // Legacy RILConstants preferred_network_mode, only for combinations with a well-known value
+        val legacyNetworkMode: Int? = when (gens.sorted().joinToString("+")) {
+            "5G" -> 23              // NR_ONLY
+            "4G" -> 11              // LTE_ONLY
+            "3G" -> 2               // WCDMA_ONLY
+            "2G" -> 1               // GSM_ONLY
+            "4G+5G" -> 24           // NR_LTE
+            "2G+3G" -> 3            // GSM_WCDMA
+            "2G+3G+4G" -> 9         // LTE_GSM_WCDMA
+            "2G+3G+4G+5G" -> 26
+            "3G+4G" -> 12           // LTE_WCDMA
+            else -> null
         }
 
         val subId = SubscriptionManager.getDefaultDataSubscriptionId()
@@ -109,7 +123,7 @@ class RealModemController(private val context: Context) {
         )
 
         if (isShizukuAvailable()) {
-            val applySettingsCmd = buildString {
+            val applySettingsCmd = if (legacyNetworkMode == null) "true" else buildString {
                 append("settings put global preferred_network_mode $legacyNetworkMode; ")
                 if (subId != SubscriptionManager.INVALID_SUBSCRIPTION_ID) {
                     append("settings put global preferred_network_mode$subId $legacyNetworkMode; ")
@@ -174,6 +188,10 @@ class RealModemController(private val context: Context) {
             context.startActivity(intent)
         }
     }
+
+    fun isAirplaneModeOn(): Boolean = try {
+        Settings.Global.getInt(context.contentResolver, Settings.Global.AIRPLANE_MODE_ON, 0) == 1
+    } catch (e: Exception) { false }
 
     fun openDeviceNetworkSettings() {
         Log.i(TAG, "openDeviceNetworkSettings")
