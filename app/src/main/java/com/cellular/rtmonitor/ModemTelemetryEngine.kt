@@ -73,6 +73,11 @@ class ModemTelemetryEngine(
         }
     }
 
+    /** Put the value as reported by the modem; JSON null when the modem reports UNAVAILABLE. */
+    private fun JSONObject.putReported(key: String, v: Int) {
+        if (v == CellInfo.UNAVAILABLE || v == Int.MAX_VALUE) put(key, JSONObject.NULL) else put(key, v)
+    }
+
     private fun isValidSinr(value: Int): Boolean {
         return value != CellInfo.UNAVAILABLE && value != Int.MAX_VALUE && value in -30..50
     }
@@ -152,6 +157,34 @@ class ModemTelemetryEngine(
             }
 
             val cellInfoList = cachedCellList ?: telephonyManager.allCellInfo ?: emptyList()
+            emitFromList(cellInfoList, formattedPlmn)
+        } catch (e: Exception) {
+            Log.e(TAG, "collectAndEmitTelemetry error: ${e.message}", e)
+        }
+    }
+
+    /** Ask the modem for a fresh measurement (bypasses the OS cache), then emit it. Falls back to cached data. */
+    @SuppressLint("MissingPermission")
+    fun requestFreshAndEmit() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            try {
+                telephonyManager.requestCellInfoUpdate(executor, object : TelephonyManager.CellInfoCallback() {
+                    override fun onCellInfo(cellInfo: MutableList<CellInfo>) {
+                        collectAndEmitTelemetry(cellInfo)
+                    }
+                    override fun onError(errorCode: Int, detail: Throwable?) {
+                        collectAndEmitTelemetry()
+                    }
+                })
+                return
+            } catch (_: Exception) {
+            }
+        }
+        collectAndEmitTelemetry()
+    }
+
+    private fun emitFromList(cellInfoList: List<CellInfo>, formattedPlmn: String) {
+        try {
 
             val payload = JSONObject()
             payload.put("plmn", formattedPlmn)
@@ -236,14 +269,14 @@ class ModemTelemetryEngine(
                 obj.put("gnb", id.nci shr 14)
                 obj.put("arfcn", id.nrarfcn)
                 obj.put("tac", id.tac)
-                obj.put("rsrp", sig.ssRsrp)
-                obj.put("rsrq", sig.ssRsrq)
+                obj.putReported("rsrp", sig.ssRsrp)
+                obj.putReported("rsrq", sig.ssRsrq)
                 if (rawNrSinr != null) {
                     obj.put("sinr", rawNrSinr)
                 } else {
                     obj.put("sinr", JSONObject.NULL)
                 }
-                obj.put("rssi", sig.ssRsrp + 22)
+                obj.put("rssi", JSONObject.NULL)
             }
 
             info is CellInfoLte -> {
@@ -267,14 +300,14 @@ class ModemTelemetryEngine(
                 obj.put("gnb", id.ci shr 8)
                 obj.put("arfcn", id.earfcn)
                 obj.put("tac", id.tac)
-                obj.put("rsrp", sig.rsrp)
-                obj.put("rsrq", sig.rsrq)
+                obj.putReported("rsrp", sig.rsrp)
+                obj.putReported("rsrq", sig.rsrq)
                 if (resolvedSinr != null) {
                     obj.put("sinr", resolvedSinr)
                 } else {
                     obj.put("sinr", JSONObject.NULL)
                 }
-                obj.put("rssi", if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && sig.rssi != CellInfo.UNAVAILABLE) sig.rssi else (sig.rsrp + 24))
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) obj.putReported("rssi", sig.rssi) else obj.put("rssi", JSONObject.NULL)
                 obj.put("ta", if (sig.timingAdvance != CellInfo.UNAVAILABLE) sig.timingAdvance else 0)
             }
 
@@ -288,10 +321,10 @@ class ModemTelemetryEngine(
                 obj.put("gnb", id.cid)
                 obj.put("arfcn", id.uarfcn)
                 obj.put("tac", id.lac)
-                obj.put("rsrp", sig.dbm)
-                obj.put("rsrq", if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) sig.ecNo else -8)
-                obj.put("sinr", 10)
-                obj.put("rssi", sig.dbm + 10)
+                obj.putReported("rsrp", sig.dbm)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) obj.putReported("rsrq", sig.ecNo) else obj.put("rsrq", JSONObject.NULL)
+                obj.put("sinr", JSONObject.NULL)
+                obj.put("rssi", JSONObject.NULL)
             }
 
             info is CellInfoGsm -> {
@@ -304,10 +337,11 @@ class ModemTelemetryEngine(
                 obj.put("gnb", id.cid)
                 obj.put("arfcn", id.arfcn)
                 obj.put("tac", id.lac)
-                obj.put("rsrp", sig.dbm)
-                obj.put("rsrq", sig.bitErrorRate)
-                obj.put("sinr", 15)
-                obj.put("rssi", sig.dbm)
+                obj.putReported("rsrp", sig.dbm)
+                obj.put("rsrq", JSONObject.NULL)
+                obj.putReported("ber", sig.bitErrorRate)
+                obj.put("sinr", JSONObject.NULL)
+                obj.putReported("rssi", sig.dbm)
             }
         }
         return obj
@@ -323,8 +357,8 @@ class ModemTelemetryEngine(
                 obj.put("pci", id.pci)
                 obj.put("tech", "5G NR")
                 obj.put("arfcn", id.nrarfcn)
-                obj.put("rsrp", sig.ssRsrp)
-                obj.put("rsrq", sig.ssRsrq)
+                obj.putReported("rsrp", sig.ssRsrp)
+                obj.putReported("rsrq", sig.ssRsrq)
             }
 
             info is CellInfoLte -> {
@@ -334,8 +368,8 @@ class ModemTelemetryEngine(
                 obj.put("pci", id.pci)
                 obj.put("tech", "4G LTE")
                 obj.put("arfcn", id.earfcn)
-                obj.put("rsrp", sig.rsrp)
-                obj.put("rsrq", sig.rsrq)
+                obj.putReported("rsrp", sig.rsrp)
+                obj.putReported("rsrq", sig.rsrq)
             }
 
             info is CellInfoWcdma -> {
@@ -345,8 +379,8 @@ class ModemTelemetryEngine(
                 obj.put("pci", id.psc)
                 obj.put("tech", "3G UMTS")
                 obj.put("arfcn", id.uarfcn)
-                obj.put("rsrp", sig.dbm)
-                obj.put("rsrq", -10)
+                obj.putReported("rsrp", sig.dbm)
+                obj.put("rsrq", JSONObject.NULL)
             }
 
             else -> return null

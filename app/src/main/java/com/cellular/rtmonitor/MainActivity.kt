@@ -343,7 +343,7 @@ class MainActivity : AppCompatActivity() {
         telemetryEngine.startListening()
         val pollRunnable = object : Runnable {
             override fun run() {
-                telemetryEngine.collectAndEmitTelemetry()
+                telemetryEngine.requestFreshAndEmit()
                 pollingHandler.postDelayed(this, 1000)
             }
         }
