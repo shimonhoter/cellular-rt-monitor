@@ -277,6 +277,17 @@
             <span id="rt-rf-diag-last" class="text-slate-300 truncate">Last RF: waiting...</span>
         </div>
 
+        
+        <div id="rt-probe-v9-panel" class="bg-slate-900 border border-amber-500/40 rounded p-1.5 flex flex-wrap items-center justify-between gap-1.5 text-[10px] font-mono shrink-0">
+            <div class="flex flex-wrap items-center gap-1">
+                <button type="button" onclick="window.__rtProbeRunStage(1)" class="px-1.5 py-0.5 rounded bg-amber-600/30 text-amber-200 border border-amber-500/40 font-bold">1:onRealModemData</button>
+                <button type="button" onclick="window.__rtProbeRunStage(2)" class="px-1.5 py-0.5 rounded bg-cyan-600/30 text-cyan-200 border border-cyan-500/40 font-bold">2:state.rf/samples</button>
+                <button type="button" onclick="window.__rtProbeRunStage(3)" class="px-1.5 py-0.5 rounded bg-indigo-600/30 text-indigo-200 border border-indigo-500/40 font-bold">3:addLog/renderLogs</button>
+                <button type="button" onclick="window.__rtProbeRunStage(4)" class="px-1.5 py-0.5 rounded bg-emerald-600/30 text-emerald-200 border border-emerald-500/40 font-bold">4:ForceDOM</button>
+            </div>
+            <span id="rt-probe-v9-status" class="text-amber-300 truncate">Probe V9: ready</span>
+        </div>
+
         <div id="log-stream" class="flex-1 bg-slate-950 border border-slate-800 rounded-lg p-2 overflow-y-auto space-y-1.5 text-xs ltr-box font-mono"></div>
     </section>
 
@@ -2528,6 +2539,135 @@ if (window.__rtStableV41) return;
       unifiedRenderLogs();
     }
   }, 1000);
+})();
+</script>
+
+
+<script id="rt-rf-stage-injector-v9">
+/* RT_RF_STAGE_INJECTOR_V9 */
+(function() {
+  if (window.__rtRfStageInjectorV9) return;
+  window.__rtRfStageInjectorV9 = true;
+
+  var seq = 900;
+
+  function setProbeStatus(msg) {
+    var el = document.getElementById("rt-probe-v9-status");
+    if (el) el.textContent = msg;
+  }
+
+  function fakePayload(stageNum) {
+    seq += 1;
+    var pci = 100 + (seq % 50);
+    var rsrp = -75 - (seq % 25);
+    var rsrq = -8 - (seq % 9);
+    var sinr = 2 + (seq % 18);
+    return {
+      plmn: "425-02 (Cellcom IL)",
+      timestamp: Date.now(),
+      servingCell: {
+        rat: "4G",
+        tech: "4G LTE",
+        band: "B3",
+        pci: pci,
+        gnb: 12000 + stageNum,
+        arfcn: 1400,
+        tac: 921,
+        ta: 5,
+        rsrp: rsrp,
+        rsrq: rsrq,
+        sinr: sinr,
+        rssi: rsrp + 18
+      },
+      neighbors: []
+    };
+  }
+
+  window.__rtProbeRunStage = function(stageNum) {
+    var st = window.state || (typeof state !== "undefined" ? state : null);
+    var payload = fakePayload(stageNum);
+    var sc = payload.servingCell;
+    var ts = new Date().toTimeString().split(" ")[0];
+    var title = sc.tech + " PCI:" + sc.pci + " | " + sc.band + " [S" + stageNum + "]";
+    var summary = "RSRP: " + sc.rsrp.toFixed(1) + " dBm | RSRQ: " + sc.rsrq.toFixed(1) + " dB | SINR: " + sc.sinr.toFixed(1) + " dB";
+
+    try {
+      if (stageNum === 1) {
+        if (typeof window.onRealModemData !== "function") {
+          setProbeStatus("S1 ERR: onRealModemData missing");
+          return;
+        }
+        window.onRealModemData(payload);
+        var logsLen1 = (st && Array.isArray(st.logs)) ? st.logs.length : -1;
+        var sampLen1 = (st && Array.isArray(st.liveSamples)) ? st.liveSamples.length : -1;
+        setProbeStatus("S1 OK -> logs=" + logsLen1 + " samp=" + sampLen1 + " rf=" + (st && st.rf ? st.rf.rsrp : "no"));
+        return;
+      }
+
+      if (stageNum === 2) {
+        if (!st) {
+          setProbeStatus("S2 ERR: state missing");
+          return;
+        }
+        st.servingCell = Object.assign({}, st.servingCell || {}, sc);
+        st.rf = Object.assign({}, st.rf || {}, { rsrp: sc.rsrp, rsrq: sc.rsrq, sinr: sc.sinr, rssi: sc.rssi });
+        st.liveSamples = Array.isArray(st.liveSamples) ? st.liveSamples : [];
+        st.liveSamples.push({
+          timestamp: new Date().toISOString(),
+          rat: sc.rat,
+          tech: sc.tech,
+          band: sc.band,
+          plmn: payload.plmn,
+          cell_id: sc.pci,
+          arfcn: sc.arfcn,
+          tac: sc.tac,
+          rsrp: sc.rsrp,
+          rsrq: sc.rsrq,
+          sinr: sc.sinr,
+          rssi: sc.rssi
+        });
+        if (typeof window.renderLogs === "function") window.renderLogs();
+        setProbeStatus("S2 OK -> samp=" + st.liveSamples.length + " rsrp=" + st.rf.rsrp);
+        return;
+      }
+
+      if (stageNum === 3) {
+        var addFn = (typeof window.addLog === "function") ? window.addLog : (typeof addLog === "function" ? addLog : null);
+        var renFn = (typeof window.renderLogs === "function") ? window.renderLogs : (typeof renderLogs === "function" ? renderLogs : null);
+        if (!addFn) {
+          setProbeStatus("S3 ERR: addLog missing");
+          return;
+        }
+        addFn("RF", "PROBE_S3", title, summary);
+        if (renFn) renFn();
+        var rfCnt3 = (st && Array.isArray(st.logs)) ? st.logs.filter(function(x) { return x && x.category === "RF"; }).length : -1;
+        setProbeStatus("S3 OK -> rfLogs=" + rfCnt3 + " ren=" + Boolean(renFn));
+        return;
+      }
+
+      if (stageNum === 4) {
+        var container = document.getElementById("log-stream");
+        if (!container) {
+          setProbeStatus("S4 ERR: #log-stream missing");
+          return;
+        }
+        var cardHtml =
+          '<div class="bg-slate-900 border border-emerald-500/60 rounded p-2 text-slate-100 space-y-1">' +
+            '<div class="flex items-center justify-between text-[11px] font-mono">' +
+              '<span class="px-1.5 py-0.5 rounded font-bold bg-emerald-500/20 text-emerald-300">RF</span>' +
+              '<span class="text-amber-300">PROBE_S4</span>' +
+              '<span class="text-slate-400">' + ts + '</span>' +
+            '</div>' +
+            '<div class="font-bold text-cyan-300">' + title + '</div>' +
+            '<div class="text-xs text-emerald-200 font-mono">' + summary + '</div>' +
+          '</div>';
+        container.insertAdjacentHTML("afterbegin", cardHtml);
+        setProbeStatus("S4 OK -> children=" + container.children.length + " hidden=" + container.offsetParent === null);
+      }
+    } catch (e) {
+      setProbeStatus("S" + stageNum + " EX: " + (e && e.message ? e.message : String(e)));
+    }
+  };
 })();
 </script>
 
