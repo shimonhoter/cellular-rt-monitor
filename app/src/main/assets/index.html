@@ -589,14 +589,6 @@
                     ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
                     : (log.category === 'RF' ? 'bg-emerald-500/15 text-emerald-300' : 'bg-amber-500/20 text-amber-300');
                 return `
-                    <div class="p-1.5 rounded border border-slate-800/80 bg-slate-900/50">
-                        <div class="flex items-center gap-1.5">
-                            <span class="text-slate-500">[${log.timestamp}]</span>
-                            <span class="px-1 rounded text-[10px] font-bold ${badge}">${log.category}</span>
-                            <span class="text-white font-bold">${log.title}</span>
-                        </div>
-                        <div class="text-slate-300 text-[11px] mt-0.5">${log.summary}</div>
-                    </div>
                 `;
             }).join('');
         }
@@ -1264,7 +1256,6 @@ ${sampledRows.join('\n')}`;
 
 
 
-<script id="rt-stable-v41">
 (function() {
   
 
@@ -1391,17 +1382,8 @@ if (window.__rtStableV41) return;
       dlg.id = "rt-help-4636-dlg";
       dlg.style.cssText = "position:fixed;inset:0;background:rgba(2,6,23,0.86);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;";
       dlg.innerHTML = `
-        <div style="width:100%;max-width:380px;background:#0f172a;border:1px solid #334155;border-radius:12px;padding:14px;color:#f8fafc;text-align:right;">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
             <strong style="font-size:14px;">עזרה ותפריט טכנאי (4636)</strong>
-            <button type="button" id="rt-close-4636-dlg" style="background:#334155;color:#fff;border:none;border-radius:6px;padding:3px 9px;font-size:11px;cursor:pointer;">סגור</button>
-          </div>
           <p style="font-size:11px;color:#cbd5e1;margin:0 0 10px 0;">אבחון מתקדם והגדרות מודם (4636) מרוכזים כאן.</p>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button type="button" id="rt-open-4636-btn" style="background:#0284c7;color:#fff;border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;">פתיחת תפריט 4636</button>
-            <button type="button" id="rt-open-guide-btn" style="background:#1e293b;color:#e2e8f0;border:1px solid #475569;border-radius:8px;padding:7px 12px;font-size:12px;cursor:pointer;">מדריך הפעלה</button>
-          </div>
-        </div>
       `;
       document.body.appendChild(dlg);
       dlg.addEventListener("click", e => { if (e.target === dlg) dlg.style.display = "none"; });
@@ -1425,15 +1407,8 @@ if (window.__rtStableV41) return;
     sec.id = "view-map";
     sec.className = "tab-view flex-1 flex flex-col p-2 gap-2 overflow-y-auto hidden";
     sec.innerHTML = `
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;background:#0f172a;border:1px solid #1e293b;border-radius:10px;padding:8px 10px;">
         <strong style="font-size:12px;">מפת ישראל ותחנות בסיס חיה</strong>
-        <button type="button" id="rt-map-center-now" style="background:#2563eb;color:#fff;border:none;border-radius:7px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;">מרכז למיקומי הנוכחי</button>
-      </div>
-      <div id="rt-map-stage" style="position:relative;width:100%;height:340px;background:#061326;border:1px solid #1e3a5f;border-radius:10px;overflow:hidden;">
-        <div id="rt-map-tooltip" style="position:absolute;top:10px;right:10px;max-width:260px;background:rgba(15,23,42,0.95);border:1px solid #38bdf8;border-radius:8px;padding:7px 9px;font-size:10px;line-height:1.45;color:#f8fafc;z-index:20;pointer-events:none;">
           ממתין למיקום ולתחנה מחוברת...
-        </div>
-      </div>
     `;
     if (liveView && liveView.nextSibling) host.insertBefore(sec, liveView.nextSibling);
     else host.appendChild(sec);
@@ -1521,10 +1496,6 @@ if (window.__rtStableV41) return;
       tip.style.top = `${Math.max(8, Math.min(h - 94, uPt.y - 76))}px`;
       tip.style.left = `${Math.max(8, Math.min(w - 255, uPt.x - 110))}px`;
       tip.innerHTML = `
-        <div><strong>מיקום:</strong> <span dir="ltr">${gps.lat.toFixed(4)}, ${gps.lon.toFixed(4)}</span></div>
-        <div><strong>תחנה מחוברת:</strong> PCI <span dir="ltr">${pci}</span> | ID <span dir="ltr">${cid}</span></div>
-        <div><strong>תדר:</strong> <span dir="ltr">${band}</span></div>
-        <div><strong>קליטה:</strong> <span dir="ltr">RSRP ${rsrp} dBm | SINR ${sinr} dB</span></div>
       `;
     };
 
@@ -1689,6 +1660,45 @@ if (window.__rtStableV41) return;
       window.rtRenderIsraelMap();
     }
   }, 1000);
+})();</script>
+
+
+<script id="rt-rf-live-logger-v41">
+(function() {
+  if (window.__rtRfLiveLoggerV41) return;
+  window.__rtRfLiveLoggerV41 = true;
+
+  var prevFn = window.onRealModemData;
+  var lastRfPush = 0;
+
+  window.onRealModemData = function(data) {
+    var ret;
+    if (typeof prevFn === "function") {
+      ret = prevFn.apply(this, arguments);
+    }
+    try {
+      var now = Date.now();
+      if (now - lastRfPush >= 1200 && typeof window.addLog === "function" && window.state) {
+        lastRfPush = now;
+        var sc = window.state.servingCell || {};
+        var rf = window.state.rf || {};
+        var rsrpStr = (typeof rf.rsrp === "number" && !Number.isNaN(rf.rsrp)) ? rf.rsrp.toFixed(1) + " dBm" : "--";
+        var rsrqStr = (typeof rf.rsrq === "number" && !Number.isNaN(rf.rsrq)) ? rf.rsrq.toFixed(1) + " dB" : "--";
+        var sinrStr = (typeof rf.sinr === "number" && !Number.isNaN(rf.sinr)) ? rf.sinr.toFixed(1) + " dB" : "--";
+        var techStr = sc.tech || window.state.activeRat || "CELL";
+        var pciStr = (sc.pci !== undefined && sc.pci !== null && sc.pci !== "---") ? sc.pci : "--";
+        var bandStr = (sc.band && sc.band !== "---") ? sc.band : "--";
+        window.addLog(
+          "RF",
+          "LIVE",
+          techStr + " PCI:" + pciStr + " | " + bandStr,
+          "RSRP: " + rsrpStr + " | RSRQ: " + rsrqStr + " | SINR: " + sinrStr
+        );
+      }
+    } catch (_err) {}
+    return ret;
+  };
+  window.onRealModemData._rtRfLogHook = true;
 })();
 </script>
 
