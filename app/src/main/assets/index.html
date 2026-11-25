@@ -1,0 +1,1745 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Cellular RT Monitor v4.1 - Pro Telemetry & AI Log Analyzer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700;900&family=JetBrains+Mono:wght@400;600;700&display=swap');
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            font-family: 'Heebo', sans-serif;
+            background-color: #070b14;
+            color: #e2e8f0;
+            overflow-x: hidden;
+        }
+        .mono {
+            font-family: 'JetBrains Mono', monospace;
+            direction: ltr;
+            display: inline-block;
+        }
+        .ltr-box {
+            direction: ltr;
+            text-align: left;
+        }
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
+        @keyframes pulse-fast { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+        .live-dot { animation: pulse-fast 1.2s infinite; }
+    </style>
+</head>
+<body class="h-screen flex flex-col overflow-hidden select-none">
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="fixed top-12 left-2 z-50 flex flex-col gap-1.5 max-w-xs w-full pointer-events-none"></div>
+
+    <!-- Compact Top Header & Navigation Tabs -->
+    <header class="bg-slate-900 border-b border-slate-800 px-2.5 py-1.5 shrink-0 z-40">
+        <div class="flex items-center justify-between gap-1.5">
+            <!-- Title & HW Status -->
+            <div class="flex items-center gap-1.5">
+                <span class="text-cyan-400 font-black text-sm tracking-tight">RT-MON <span class="text-[10px] text-slate-400 font-normal">v4.1</span></span>
+                <span id="status-badge" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                    <span id="status-dot" class="w-1.5 h-1.5 rounded-full bg-amber-400 live-dot"></span>
+                    <span id="status-text">WAITING HW</span>
+                </span>
+            </div>
+
+            <!-- Top-left Exit & Help (4636 inside Help) + Shizuku -->
+            <div class="flex items-center gap-1">
+                <button type="button" id="rt-explicit-exit-btn" onclick="rtTriggerCleanExit()" class="px-2 py-0.5 rounded text-[10px] font-bold bg-red-700/90 hover:bg-red-600 text-white border border-red-400/60">
+                    יציאה
+                </button>
+                <button type="button" id="rt-help-menu-btn" onclick="rtOpenHelpWith4636()" class="px-2 py-0.5 rounded text-[10px] font-bold bg-cyan-600/30 hover:bg-cyan-600/50 text-cyan-200 border border-cyan-500/50 flex items-center gap-0.5" title="עזרה ותפריט טכנאי 4636">
+                    <span>❓</span> עזרה
+                </button>
+                <button onclick="openShizukuModal()" id="btn-shizuku-status" class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                    ⚡ Shizuku
+                </button>
+            </div>
+        </div>
+
+        <!-- 4 Main Navigation Tabs -->
+        <nav class="grid grid-cols-5 gap-1 mt-1.5 bg-slate-950 p-0.5 rounded-lg border border-slate-800 text-[10px] font-bold">
+            <button onclick="switchTab('live')" id="tab-btn-live" class="tab-btn py-1 rounded-md bg-cyan-600 text-white transition">📡 נתונים חיים</button>
+            <button type="button" onclick="rtSwitchToMapTab()" id="tab-btn-map" class="tab-btn py-1 rounded-md text-slate-400 hover:text-white transition">🗺️ מפה</button>
+            <button onclick="switchTab('logs')" id="tab-btn-logs" class="tab-btn py-1 rounded-md text-slate-400 hover:text-white transition">📜 לוג וייצוא</button>
+            <button onclick="switchTab('analytics')" id="tab-btn-analytics" class="tab-btn py-1 rounded-md text-slate-400 hover:text-white transition">📊 ניתוח וגרפים</button>
+            <button onclick="switchTab('ai')" id="tab-btn-ai" class="tab-btn py-1 rounded-md text-slate-400 hover:text-white transition">🤖 ניתוח AI</button>
+        </nav>
+    </header>
+
+    <!-- ===================================================================== -->
+    <!-- TAB 1: SINGLE-SCREEN NO-SCROLL LIVE TELEMETRY                         -->
+    <!-- ===================================================================== -->
+    <main id="view-live" class="tab-view flex-1 flex flex-col justify-between p-2 gap-1.5 overflow-hidden">
+
+        <!-- Row 1: RAT Lock & Airplane Mode Control Strip -->
+        <div class="flex items-center justify-between gap-1.5 bg-slate-900 border border-slate-800 rounded-lg p-1.5 shrink-0">
+            <div class="flex items-center gap-0.5 text-[11px]">
+                <button onclick="setRatMode('AUTO')" id="rat-AUTO" class="rat-btn px-2 py-1 rounded font-bold bg-cyan-600 text-white">Auto</button>
+                <button onclick="setRatMode('5G')" id="rat-5G" class="rat-btn px-2 py-1 rounded font-medium text-slate-300">5G</button>
+                <button onclick="setRatMode('4G')" id="rat-4G" class="rat-btn px-2 py-1 rounded font-medium text-slate-300">4G</button>
+                <button onclick="setRatMode('3G')" id="rat-3G" class="rat-btn px-2 py-1 rounded font-medium text-slate-300">3G</button>
+                <button onclick="setRatMode('2G')" id="rat-2G" class="rat-btn px-2 py-1 rounded font-medium text-slate-300">2G</button>
+            </div>
+            <button onclick="toggleAirplaneMode()" id="btn-airplane" class="px-2.5 py-1 rounded text-[11px] font-bold bg-slate-800 text-amber-300 border border-slate-700">
+                ✈️ <span id="airplane-text">טיסה: כבוי</span>
+            </button>
+        </div>
+
+        <!-- Row 2: Serving Cell Compact Identity Grid -->
+        <section class="bg-slate-900 border border-slate-800 rounded-lg p-2 shrink-0">
+            <div class="flex items-center justify-between mb-1">
+                <div class="flex items-center gap-1.5">
+                    <span id="cell-tech" class="px-1.5 py-0.5 rounded text-[11px] font-black bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 mono">---</span>
+                    <span id="cell-band" class="px-1.5 py-0.5 rounded text-[11px] font-bold bg-slate-800 text-slate-200 mono">---</span>
+                </div>
+                <span id="cell-plmn" class="text-[11px] font-bold text-slate-300 mono">ממתין למודם...</span>
+            </div>
+
+            <div class="grid grid-cols-4 gap-1 text-[10px]">
+                <div class="bg-slate-950 px-1.5 py-1 rounded border border-slate-800/80">
+                    <div id="lbl-pci" class="text-slate-500">PCI / PSC</div>
+                    <div id="cell-pci" class="font-bold text-cyan-400 mono text-xs">---</div>
+                </div>
+                <div class="bg-slate-950 px-1.5 py-1 rounded border border-slate-800/80">
+                    <div id="lbl-gnb" class="text-slate-500">eNB / gNB</div>
+                    <div id="cell-gnb" class="font-bold text-white mono text-xs">---</div>
+                </div>
+                <div class="bg-slate-950 px-1.5 py-1 rounded border border-slate-800/80">
+                    <div id="lbl-arfcn" class="text-slate-500">ARFCN</div>
+                    <div id="cell-arfcn" class="font-bold text-white mono text-xs">---</div>
+                </div>
+                <div class="bg-slate-950 px-1.5 py-1 rounded border border-slate-800/80">
+                    <div id="lbl-tac" class="text-slate-500">TAC / LAC</div>
+                    <div id="cell-tac" class="font-bold text-slate-200 mono text-xs">---</div>
+                </div>
+                <div class="bg-slate-950 px-1.5 py-1 rounded border border-slate-800/80">
+                    <div class="text-slate-500">BW / Freq</div>
+                    <div id="cell-bw" class="font-bold text-slate-200 mono text-xs">---</div>
+                </div>
+                <div class="bg-slate-950 px-1.5 py-1 rounded border border-slate-800/80">
+                    <div class="text-slate-500">TA (מרחק)</div>
+                    <div id="cell-ta" class="font-bold text-slate-200 mono text-xs">---</div>
+                </div>
+                <div class="bg-slate-950 px-1.5 py-1 rounded border border-slate-800/80">
+                    <div class="text-slate-500">דגימות</div>
+                    <div id="sample-count" class="font-bold text-emerald-400 mono text-xs">0</div>
+                </div>
+                <div class="bg-slate-950 px-1.5 py-1 rounded border border-slate-800/80">
+                    <div class="text-slate-500">מעברי תא</div>
+                    <div id="ho-count" class="font-bold text-amber-400 mono text-xs">0</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Row 3: 4 Core RF KPIs -->
+        <section class="grid grid-cols-4 gap-1.5 shrink-0">
+            <div class="bg-slate-900 border border-slate-800 rounded-lg p-1.5">
+                <div class="flex justify-between items-center text-[10px]">
+                    <span id="kpi1-name" class="font-bold text-slate-400">RSRP</span>
+                    <span id="rsrp-badge" class="text-[9px] px-1 rounded bg-slate-800 text-slate-400">--</span>
+                </div>
+                <div class="my-0.5">
+                    <span id="val-rsrp" class="text-base font-black text-emerald-400 mono">---</span>
+                    <span class="text-[9px] text-slate-400 whitespace-nowrap inline mr-0.5">dBm</span>
+                </div>
+                <div class="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
+                    <div id="bar-rsrp" class="bg-emerald-400 h-full" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <div class="bg-slate-900 border border-slate-800 rounded-lg p-1.5">
+                <div class="flex justify-between items-center text-[10px]">
+                    <span id="kpi2-name" class="font-bold text-slate-400">RSRQ</span>
+                    <span id="rsrq-badge" class="text-[9px] px-1 rounded bg-slate-800 text-slate-400">--</span>
+                </div>
+                <div class="my-0.5 whitespace-nowrap">
+                    <span id="val-rsrq" class="text-base font-black text-cyan-400 mono">---</span>
+                    <span id="kpi2-unit" class="text-[9px] text-slate-400 whitespace-nowrap inline mr-0.5">dB</span>
+                </div>
+                <div class="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
+                    <div id="bar-rsrq" class="bg-cyan-400 h-full" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <div class="bg-slate-900 border border-slate-800 rounded-lg p-1.5">
+                <div class="flex justify-between items-center text-[10px]">
+                    <span id="kpi3-name" class="font-bold text-slate-400">SINR</span>
+                    <span id="sinr-badge" class="text-[9px] px-1 rounded bg-slate-800 text-slate-400">--</span>
+                </div>
+                <div class="my-0.5 whitespace-nowrap">
+                    <span id="val-sinr" class="text-base font-black text-indigo-400 mono">---</span>
+                    <span class="text-[9px] text-slate-400 whitespace-nowrap inline mr-0.5">dB</span>
+                </div>
+                <div class="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
+                    <div id="bar-sinr" class="bg-indigo-400 h-full" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <div class="bg-slate-900 border border-slate-800 rounded-lg p-1.5">
+                <div class="flex justify-between items-center text-[10px]">
+                    <span class="font-bold text-slate-400">RSSI</span>
+                    <span id="rssi-badge" class="text-[9px] px-1 rounded bg-slate-800 text-slate-400">--</span>
+                </div>
+                <div class="my-0.5 whitespace-nowrap">
+                    <span id="val-rssi" class="text-base font-black text-amber-400 mono">---</span>
+                    <span class="text-[9px] text-slate-400 whitespace-nowrap inline mr-0.5">dBm</span>
+                </div>
+                <div class="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
+                    <div id="bar-rssi" class="bg-amber-400 h-full" style="width: 0%"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Row 4: Live RF Waveform Chart -->
+        <section class="bg-slate-900 border border-slate-800 rounded-lg p-1.5 flex flex-col flex-1 min-h-[85px]">
+            <div class="flex items-center justify-between text-[10px] mb-1 shrink-0">
+                <span class="font-bold text-slate-400">גרף קליטה חי</span>
+                <div class="flex items-center gap-2">
+                    <span class="text-emerald-400">● <span id="legend-rsrp">RSRP</span></span>
+                    <span class="text-amber-400">● RSSI</span>
+                    <span class="text-indigo-400">● SINR</span>
+                </div>
+            </div>
+            <div class="relative flex-1 w-full bg-slate-950 rounded border border-slate-800 overflow-hidden">
+                <canvas id="rfChart" class="w-full h-full block"></canvas>
+            </div>
+        </section>
+
+        <!-- Row 5: Compact Neighbor Cells Table -->
+        <section class="bg-slate-900 border border-slate-800 rounded-lg p-1.5 h-[115px] flex flex-col shrink-0">
+            <div class="flex items-center justify-between text-[10px] mb-1 shrink-0">
+                <span class="font-bold text-slate-300">תאים שכנים (Neighbors)</span>
+                <span id="neighbor-count" class="text-slate-500 mono">0 cells</span>
+            </div>
+            <div class="flex-1 overflow-y-auto">
+                <table class="w-full text-[10px] text-right">
+                    <thead class="text-slate-500 border-b border-slate-800 sticky top-0 bg-slate-900">
+                        <tr>
+                            <th class="py-0.5 px-1">PCI/PSC</th>
+                            <th class="py-0.5 px-1">רשת</th>
+                            <th class="py-0.5 px-1">ARFCN</th>
+                            <th class="py-0.5 px-1">עוצמה</th>
+                            <th class="py-0.5 px-1">הפרש</th>
+                        </tr>
+                    </thead>
+                    <tbody id="neighbors-tbody" class="divide-y divide-slate-800/50 font-mono">
+                        <tr><td colspan="5" class="py-2 text-center text-slate-500">ממתין לנתוני אנטנות מהמכשיר...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <!-- ===================================================================== -->
+    <!-- TAB 2: LIVE LOG STREAM, EXPORT & IMPORT FILE                          -->
+    <!-- ===================================================================== -->
+    <section id="view-logs" class="tab-view hidden flex-1 flex flex-col p-2.5 gap-2 overflow-hidden">
+        <div class="bg-slate-900 border border-slate-800 rounded-lg p-2 flex flex-wrap items-center justify-between gap-2 shrink-0">
+            <div class="flex items-center gap-1.5">
+                <button onclick="exportLogs('csv')" class="px-2.5 py-1.5 rounded bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold">
+                    ⬇ ייצוא CSV
+                </button>
+                <button onclick="exportLogs('json')" class="px-2.5 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold">
+                    ⬇ ייצוא JSON
+                </button>
+            </div>
+            <div class="flex items-center gap-1.5">
+                <label class="cursor-pointer px-2.5 py-1.5 rounded bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 text-xs font-bold">
+                    📂 טען קובץ Log (CSV/JSON)
+                    <input type="file" id="log-file-input" accept=".csv,.json,.txt,.log" onchange="handleFileUpload(event)" class="hidden">
+                </label>
+                <button onclick="clearLogs()" class="px-2 py-1.5 rounded bg-slate-800 text-rose-400 text-xs font-bold">נקה</button>
+            </div>
+        </div>
+
+        <div id="log-source-banner" class="bg-slate-900/80 border border-slate-800 rounded-lg px-2.5 py-1.5 flex items-center justify-between text-xs shrink-0">
+            <span>מקור נתונים פעיל: <strong id="active-dataset-label" class="text-cyan-400">הקלטה חיה מהמכשיר</strong></span>
+            <button id="btn-reset-live" onclick="resetToLiveDataset()" class="hidden px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 text-[11px] font-bold">חזור להקלטה חיה</button>
+        </div>
+
+        <div class="flex items-center gap-1.5 text-xs shrink-0">
+            <button onclick="setLogFilter('ALL')" id="filter-ALL" class="log-filter-btn px-2.5 py-1 rounded bg-cyan-600 text-white font-bold">הכל</button>
+            <button onclick="setLogFilter('HO')" id="filter-HO" class="log-filter-btn px-2.5 py-1 rounded bg-slate-800 text-slate-300">Handover</button>
+            <button onclick="setLogFilter('RF')" id="filter-RF" class="log-filter-btn px-2.5 py-1 rounded bg-slate-800 text-slate-300">דגימות RF</button>
+            <button onclick="setLogFilter('SYS')" id="filter-SYS" class="log-filter-btn px-2.5 py-1 rounded bg-slate-800 text-slate-300">מערכת / מודם</button>
+        </div>
+
+        <div id="log-stream" class="flex-1 bg-slate-950 border border-slate-800 rounded-lg p-2 overflow-y-auto space-y-1.5 text-xs ltr-box font-mono"></div>
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- TAB 3: LOG ANALYTICS, CONCLUSIONS, CHARTS & HISTOGRAMS                -->
+    <!-- ===================================================================== -->
+    <section id="view-analytics" class="tab-view hidden flex-1 flex flex-col p-2.5 gap-2.5 overflow-y-auto">
+        <div class="flex items-center justify-between bg-slate-900 border border-slate-800 rounded-lg p-2.5">
+            <div>
+                <h2 class="text-sm font-bold text-white">ניתוח ביצועי רשת ומודם</h2>
+                <p id="analytics-subtitle" class="text-[11px] text-slate-400">מבוסס על הלוג החי מהמכשיר</p>
+            </div>
+            <button onclick="runLogAnalytics()" class="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold">
+                🔄 רענן ניתוח
+            </button>
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+            <div class="bg-slate-900 border border-slate-800 rounded-lg p-2.5">
+                <div class="text-slate-400 text-[11px]">ממוצע RSRP</div>
+                <div id="stat-avg-rsrp" class="text-lg font-black text-emerald-400 mono">---</div>
+                <div id="stat-minmax-rsrp" class="text-[10px] text-slate-500 mono">Min/Max: --</div>
+            </div>
+            <div class="bg-slate-900 border border-slate-800 rounded-lg p-2.5">
+                <div class="text-slate-400 text-[11px]">ממוצע SINR</div>
+                <div id="stat-avg-sinr" class="text-lg font-black text-indigo-400 mono">---</div>
+                <div id="stat-minmax-sinr" class="text-[10px] text-slate-500 mono">Min/Max: --</div>
+            </div>
+            <div class="bg-slate-900 border border-slate-800 rounded-lg p-2.5">
+                <div class="text-slate-400 text-[11px]">יציבות תאים (HO)</div>
+                <div id="stat-ho-total" class="text-lg font-black text-amber-400 mono">0</div>
+                <div id="stat-unique-cells" class="text-[10px] text-slate-500">תאים ייחודיים: 0</div>
+            </div>
+            <div class="bg-slate-900 border border-slate-800 rounded-lg p-2.5">
+                <div class="text-slate-400 text-[11px]">טכנולוגיה דומיננטית</div>
+                <div id="stat-dom-rat" class="text-lg font-black text-cyan-400 mono">---</div>
+                <div id="stat-total-samples" class="text-[10px] text-slate-500">סה"כ דגימות: 0</div>
+            </div>
+        </div>
+
+        <div class="bg-slate-900 border border-cyan-500/30 rounded-lg p-3">
+            <h3 class="text-xs font-bold text-cyan-400 mb-2">📋 מסקנות אוטומטיות על הרשת והמכשיר:</h3>
+            <ul id="analytics-conclusions" class="space-y-1.5 text-xs text-slate-200 list-disc list-inside">
+                <li>אסוף דגימות או טען קובץ לוג כדי להפיק מסקנות.</li>
+            </ul>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-lg p-3">
+            <h3 class="text-xs font-bold text-slate-300 mb-1">היסטוגרמת התפלגות עוצמת קליטה (RSRP dBm)</h3>
+            <div class="h-44 w-full bg-slate-950 rounded border border-slate-800 p-1">
+                <canvas id="histCanvas" class="w-full h-full block"></canvas>
+            </div>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-lg p-3">
+            <h3 class="text-xs font-bold text-slate-300 mb-1">גרף התפלגות זמן לפי טכנולוגיה ותאים (RAT / PCI)</h3>
+            <div class="h-44 w-full bg-slate-950 rounded border border-slate-800 p-1">
+                <canvas id="ratChartCanvas" class="w-full h-full block"></canvas>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- TAB 4: AI SMART LOG ANALYZER (PROMPT + LOG DATA)                      -->
+    <!-- ===================================================================== -->
+    <section id="view-ai" class="tab-view hidden flex-1 flex flex-col p-2.5 gap-2.5 overflow-y-auto">
+        <div class="bg-slate-900 border border-indigo-500/40 rounded-lg p-3">
+            <h2 class="text-sm font-bold text-white flex items-center gap-1.5 mb-1">
+                <span>🤖</span> ניתוח חכם של הלוג באמצעות AI
+            </h2>
+            <p class="text-xs text-slate-300 leading-relaxed">
+                המערכת תארוז אוטומטית את הנתונים הסטטיסטיים, אירועי ה-Handover ודגימות הקליטה מהלוג הפעיל (<span id="ai-dataset-badge" class="text-cyan-400 font-bold">הלוג החי</span>) יחד עם הפרומפט שתכתוב.
+            </p>
+        </div>
+
+        <div class="flex flex-wrap gap-1.5 text-[11px]">
+            <button onclick="setAiPreset('נתח את איכות הקליטה והיציבות של הרשת בלוג זה. האם יש נפילות קליטה, בעיות SINR או תופעת Ping-Pong במעברי תא?')" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700">
+                🔍 אבחון יציבות ונפילות
+            </button>
+            <button onclick="setAiPreset('בדוק את התפלגות התדרים (Bands) והטכנולוגיות (5G/4G) בלוג. על איזה תדר המכשיר מקבל את הביצועים הטובים ביותר?')" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-slate-700">
+                📶 השוואת תדרים ודורות
+            </button>
+            <button onclick="setAiPreset('האם התנהגות המודם בלוג מעידה על בעיית חומרה/אנטנה במכשיר או על עומס וכיסוי חלש של מפעיל הסלולר?')" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700">
+                🛠️ מכשיר מול רשת
+            </button>
+        </div>
+
+        <div class="flex flex-col gap-1">
+            <label class="text-xs font-bold text-slate-300">הנחיה / שאלה ל-AI:</label>
+            <textarea id="ai-user-prompt" rows="3" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white focus:border-cyan-500 focus:outline-none" placeholder="כתוב כאן מה תרצה שה-AI יבדוק בלוג...">נתח את נתוני הלוג המצורפים, אתר חריגות בעוצמת האות (RSRP/SINR) ובמעברי התאים (Handovers), והמלץ כיצד לשפר את יציבות החיבור.</textarea>
+        </div>
+
+        <details class="bg-slate-900 border border-slate-800 rounded-lg p-2.5 text-xs">
+            <summary class="cursor-pointer font-bold text-slate-300">🔑 הגדרת מפתח API למענה ישיר בתוך האפליקציה (אופציונלי)</summary>
+            <div class="mt-2 space-y-2">
+                <p class="text-[11px] text-slate-400">ניתן להזין מפתח Gemini API (חינמי מ-Google AI Studio) לקבלת תשובה מידית בתוך המסך, או להשתמש בכפתורי ההעתקה והשליחה ל-ChatGPT / Gemini ללא מפתח.</p>
+                <input type="password" id="gemini-api-key" placeholder="הדבק כאן Gemini API Key (AIza...)" class="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-white mono">
+            </div>
+        </details>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <button onclick="runDirectGeminiAnalysis()" class="py-2.5 px-3 rounded-lg bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white text-xs font-bold shadow-lg">
+                ✨ נתח עכשיו בתוך האפליקציה (Gemini API)
+            </button>
+            <button onclick="copyPromptWithLogData()" class="py-2.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-lg">
+                📋 העתק פרומפט + נתוני לוג (להדבקה ב-Gemini / ChatGPT)
+            </button>
+        </div>
+
+        <div class="flex-1 flex flex-col gap-1 min-h-[160px]">
+            <div class="flex items-center justify-between text-xs">
+                <span class="font-bold text-cyan-400">תוצאת ניתוח / חבילת נתונים מוכנה:</span>
+                <span id="ai-status-lbl" class="text-[11px] text-slate-400">מוכן</span>
+            </div>
+            <div id="ai-output-box" class="flex-1 bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs text-slate-200 whitespace-pre-wrap overflow-y-auto leading-relaxed">בחר באחת האפשרויות למעלה כדי להפיק ניתוח חכם מבוסס AI על נתוני הלוג שלך.</div>
+        </div>
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- MODALS: SHIZUKU GUIDE & DEVICE 4636 MENU                              -->
+    <!-- ===================================================================== -->
+    <div id="shizuku-guide-modal" class="hidden fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-cyan-500/40 rounded-xl max-w-md w-full p-4 shadow-2xl">
+            <div class="flex items-center justify-between mb-2">
+                <h3 class="text-sm font-bold text-white">⚡ הפעלת Shizuku לשליטה ישירה במודם</h3>
+                <button onclick="closeShizukuModal()" class="text-slate-400 hover:text-white text-base">✕</button>
+            </div>
+            <p class="text-xs text-slate-300 mb-2">
+                שירות <strong>Shizuku</strong> כבוי כרגע (נדרשת הפעלה מחדש לאחר כיבוי המכשיר):
+            </p>
+            <ol class="list-decimal list-inside text-xs text-slate-200 space-y-1.5 bg-slate-950 border border-slate-800 rounded-lg p-2.5 mb-3">
+                <li>ודא חיבור לרשת <strong>Wi-Fi</strong> פעילה.</li>
+                <li>פתח <strong>Developer Options</strong> והפעל <strong>Wireless debugging</strong>.</li>
+                <li>פתח את אפליקציית <strong>Shizuku</strong> ולחץ על <strong>Start</strong>.</li>
+            </ol>
+            <div class="flex flex-col gap-1.5">
+                <button onclick="openDevOptionsNative()" class="w-full py-2 px-3 bg-cyan-600 text-white rounded-lg text-xs font-bold">⚙️ פתח Developer Options</button>
+                <button onclick="openShizukuAppNative()" class="w-full py-2 px-3 bg-indigo-600 text-white rounded-lg text-xs font-bold">🚀 פתח אפליקציית Shizuku</button>
+                <button type="button" id="rt-unified-help-btn" onclick="rtUnifiedOpenHelp()"  class="w-full py-2 px-3 bg-emerald-600/20 text-emerald-300 border border-emerald-500/40 rounded-lg text-xs font-bold">❓ פתח מדריך התקנה מלא (כולל צילומי מסך)</button>
+                <button onclick="closeShizukuModal()" class="w-full py-1.5 px-3 bg-slate-800 text-slate-300 rounded-lg text-xs">סגור (צפייה בנתונים בלבד)</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="device-modal" class="hidden fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-xl max-w-md w-full p-4 shadow-2xl">
+            <div class="flex items-center justify-between mb-2">
+                <h3 class="text-sm font-bold text-white">📱 תפריט הנדסת רדיו של אנדרואיד</h3>
+                <button onclick="closeDeviceModal()" class="text-slate-400 hover:text-white text-base">✕</button>
+            </div>
+            <div class="bg-slate-950 border border-slate-800 rounded-lg p-2.5 mb-3 text-xs">
+                <p class="text-slate-400 mb-1.5">חייג בחייגן הטלפון לנעילת דור ידנית:</p>
+                <div class="flex items-center justify-between bg-slate-900 p-2 rounded border border-slate-700">
+                    <span class="mono text-sm font-bold text-emerald-400">*#*#4636#*#*</span>
+                    <button onclick="copyDialerCode()" class="px-2 py-1 bg-cyan-600 text-white rounded text-[11px] font-bold">העתק</button>
+                </div>
+            </div>
+            <button onclick="closeDeviceModal()" class="w-full py-2 bg-slate-800 text-slate-200 rounded-lg text-xs font-bold">סגור</button>
+        </div>
+    </div>
+
+    <script>
+        const state = {
+            airplaneMode: false,
+            ratLock: 'AUTO',
+            activeRat: '4G',
+            sampleCount: 0,
+            hoCount: 0,
+            imsi: '---',
+            logFilter: 'ALL',
+            servingCell: {
+                tech: '---', band: '---', plmn: 'ממתין להרשאות/מודם',
+                pci: '---', gnb: '---', arfcn: '---', tac: '---', bw: '---', ta: 0
+            },
+            rf: { rsrp: null, rsrq: null, sinr: null, rssi: null },
+            neighbors: [],
+            history: [],
+            liveSamples: [],
+            importedSamples: null,
+            importedFileName: null,
+            logs: []
+        };
+        window.state = state;
+
+        const MAX_HISTORY = 90;
+
+        function getActiveSamples() {
+            return state.importedSamples !== null ? state.importedSamples : state.liveSamples;
+        }
+
+        function openHelpCenter() {
+            window.location.href = 'help.html';
+        }
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-view').forEach(el => el.classList.add('hidden'));
+            document.getElementById('view-' + tabName).classList.remove('hidden');
+
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.className = 'tab-btn py-1 rounded-md text-slate-400 hover:text-white transition';
+            });
+            document.getElementById('tab-btn-' + tabName).className = 'tab-btn py-1 rounded-md bg-cyan-600 text-white transition';
+
+            if (tabName === 'logs') {
+                if (typeof renderLogs === 'function') renderLogs();
+            } else if (tabName === 'analytics') {
+                runLogAnalytics();
+            } else if (tabName === 'ai') {
+                document.getElementById('ai-dataset-badge').textContent =
+                    state.importedFileName ? `קובץ מיובא: ${state.importedFileName}` : `הלוג החי (${state.liveSamples.length} דגימות)`;
+            }
+        }
+
+        function showToast(title, message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            const borderCol = type === 'ho' ? 'border-cyan-500' : (type === 'warn' ? 'border-rose-500' : 'border-indigo-500');
+            toast.className = `pointer-events-auto bg-slate-900/95 border-r-4 ${borderCol} border border-slate-700 rounded-lg p-2 shadow-xl text-xs`;
+            toast.innerHTML = `<div class="font-bold text-cyan-300">${title}</div><div class="text-slate-200 text-[11px]">${message}</div>`;
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 3500);
+        }
+
+        function openShizukuModal() { document.getElementById('shizuku-guide-modal').classList.remove('hidden'); }
+        function closeShizukuModal() { document.getElementById('shizuku-guide-modal').classList.add('hidden'); }
+        function openRealDeviceSettings() { document.getElementById('device-modal').classList.remove('hidden'); }
+        function closeDeviceModal() { document.getElementById('device-modal').classList.add('hidden'); }
+        function copyDialerCode() {
+            navigator.clipboard.writeText('*#*#4636#*#*');
+            showToast('הקוד הועתק', '*#*#4636#*#* הועתק ללוח');
+        }
+        function openDevOptionsNative() {
+            if (window.AndroidModem && window.AndroidModem.openDeveloperOptions) window.AndroidModem.openDeveloperOptions();
+        }
+        function openShizukuAppNative() {
+            if (window.AndroidModem && window.AndroidModem.openShizukuApp) window.AndroidModem.openShizukuApp();
+        }
+
+        let _rtShizukuInitialPromptHandled = false;
+        window.onShizukuStatus = function(isRunning) {
+            const btn = document.getElementById('btn-shizuku-status');
+            if (isRunning) {
+                btn.className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40';
+                btn.textContent = '⚡ Shizuku פעיל';
+                closeShizukuModal();
+                _rtShizukuInitialPromptHandled = true;
+            } else {
+                btn.className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40';
+                btn.textContent = '⚡ הפעל Shizuku';
+                if (!_rtShizukuInitialPromptHandled) {
+                    _rtShizukuInitialPromptHandled = true;
+                    openShizukuModal();
+                    addLog('SYS', 'SHIZUKU', 'חלון הנחיות Shizuku הוצג בפתיחת האפליקציה');
+                }
+            }
+        };
+
+        function setRatMode(mode) {
+            state.ratLock = mode;
+            document.querySelectorAll('.rat-btn').forEach(b => {
+                b.className = 'rat-btn px-2 py-1 rounded font-medium text-slate-300';
+            });
+            document.getElementById('rat-' + mode).className = 'rat-btn px-2 py-1 rounded font-bold bg-cyan-600 text-white';
+
+            addLog('SYS', 'CMD', `RAT_Lock: ${mode}`, `Requested hardware RAT lock to ${mode}`);
+            if (window.AndroidModem && window.AndroidModem.setRatMode) {
+                window.AndroidModem.setRatMode(mode);
+            }
+        }
+
+        function toggleAirplaneMode() {
+            state.airplaneMode = !state.airplaneMode;
+            const btn = document.getElementById('btn-airplane');
+            const txt = document.getElementById('airplane-text');
+            if (state.airplaneMode) {
+                btn.className = 'px-2.5 py-1 rounded text-[11px] font-bold bg-amber-500 text-slate-950';
+                txt.textContent = 'טיסה: פעיל';
+            } else {
+                btn.className = 'px-2.5 py-1 rounded text-[11px] font-bold bg-slate-800 text-amber-300 border border-slate-700';
+                txt.textContent = 'טיסה: כבוי';
+            }
+            addLog('SYS', 'CMD', `Airplane_Mode: ${state.airplaneMode ? 'ON' : 'OFF'}`, `Toggled RF transceiver`);
+            if (window.AndroidModem && window.AndroidModem.setAirplaneMode) {
+                window.AndroidModem.setAirplaneMode(state.airplaneMode);
+            }
+        }
+
+        function addLog(category, direction, title, summary) {
+            const now = new Date();
+            const ts = now.toTimeString().split(' ')[0];
+            state.logs.unshift({ id: Date.now() + Math.random(), timestamp: ts, category, direction, title, summary });
+            if (state.logs.length > 400) state.logs.pop();
+            if (!document.getElementById('view-logs').classList.contains('hidden')) {
+                renderLogs();
+            }
+        }
+
+        function setLogFilter(filter) {
+            state.logFilter = filter;
+            document.querySelectorAll('.log-filter-btn').forEach(btn => {
+                btn.className = 'log-filter-btn px-2.5 py-1 rounded bg-slate-800 text-slate-300';
+            });
+            document.getElementById('filter-' + filter).className = 'log-filter-btn px-2.5 py-1 rounded bg-cyan-600 text-white font-bold';
+            renderLogs();
+        }
+
+        function renderLogs() {
+            const container = document.getElementById('log-stream');
+            const filtered = state.logs.filter(l => state.logFilter === 'ALL' || l.category === state.logFilter);
+            if (filtered.length === 0) {
+                container.innerHTML = '<div class="text-slate-500 text-center py-6">אין רשומות להצגה בקטגוריה זו.</div>';
+                return;
+            }
+            container.innerHTML = filtered.map(log => {
+                const badge = log.category === 'HO'
+                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                    : (log.category === 'RF' ? 'bg-emerald-500/15 text-emerald-300' : 'bg-amber-500/20 text-amber-300');
+                return `
+                `;
+            }).join('');
+        }
+
+        function clearLogs() {
+            state.logs = [];
+            state.liveSamples = [];
+            state.sampleCount = 0;
+            renderLogs();
+            updateLiveUI();
+        }
+
+        window.onRealModemData = function(data) {
+            try {
+                if (typeof data === 'string') {
+                    try { data = JSON.parse(data); } catch (_e) { return; }
+                }
+                if (!data || typeof data !== 'object') return;
+
+                const toNum = (v) => {
+                    if (v === null || v === undefined || v === '' || v === '---') return null;
+                    const n = Number(v);
+                    return Number.isFinite(n) ? n : null;
+                };
+
+                const badge = document.getElementById('status-badge');
+                const dot = document.getElementById('status-dot');
+                const statusTxt = document.getElementById('status-text');
+                if (badge) badge.className = 'inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30';
+                if (dot) dot.className = 'w-1.5 h-1.5 rounded-full bg-emerald-400 live-dot';
+                if (statusTxt) statusTxt.textContent = 'REAL MODEM';
+
+                const sc = (data.servingCell && typeof data.servingCell === 'object') ? data.servingCell : data;
+                if (sc && typeof sc === 'object') {
+                    if (sc.handoverOccurred) {
+                        state.hoCount = (state.hoCount || 0) + 1;
+                        const hoMsg = `PCI ${sc.previousPci ?? '--'} -> PCI ${sc.pci ?? '--'} (${sc.tech || state.activeRat} ${sc.band || ''})`;
+                        try { addLog('HO', 'HW', `[HO #${state.hoCount}] Cell Handover`, hoMsg); } catch (_e) {}
+                        try { showToast('מעבר תחנת בסיס (Handover)', hoMsg, 'ho'); } catch (_e) {}
+                    }
+
+                    const rawBand = sc.band || data.band;
+                    if (rawBand && String(rawBand).trim() !== '---') {
+                        let enriched = String(rawBand).trim();
+                        try {
+                            if (typeof formatBandWithRange === 'function') {
+                                const fb = formatBandWithRange(enriched);
+                                if (fb && fb !== '---') enriched = fb;
+                            }
+                        } catch (_e) {}
+                        if (state.servingCell.band !== '---' && enriched !== state.servingCell.band) {
+                            try { addLog('RF', 'BAND', `${sc.tech || state.activeRat} Band: ${enriched}`, 'Active band & frequency range'); } catch (_e) {}
+                        }
+                        state.servingCell.band = enriched;
+                    }
+
+                    const imsiVal = data.imsi || sc.imsi;
+                    if (imsiVal && String(imsiVal) !== 'Unavailable' && !String(imsiVal).startsWith('Missing') && imsiVal !== state.imsi) {
+                        state.imsi = String(imsiVal);
+                        try { addLog('SYS', 'IMSI', `IMSI: ${state.imsi}`, `Subscriber ID: ${state.imsi}`); } catch (_e) {}
+                    }
+
+                    const plmnVal = data.plmn || sc.plmn;
+                    if (plmnVal && String(plmnVal).trim() !== '') {
+                        state.servingCell.plmn = String(plmnVal);
+                    }
+                    if (sc.rat) state.activeRat = String(sc.rat);
+                    if (sc.tech) state.servingCell.tech = String(sc.tech);
+                    else if (sc.rat) state.servingCell.tech = String(sc.rat);
+
+                    const pciN = toNum(sc.pci ?? sc.physicalCellId);
+                    if (pciN !== null && pciN >= 0 && pciN < 2147483647) state.servingCell.pci = pciN;
+
+                    const gnbN = toNum(sc.gnb ?? sc.enodebId ?? sc.cellId);
+                    if (gnbN !== null && gnbN >= 0 && gnbN < 2147483647) state.servingCell.gnb = gnbN;
+
+                    const arfcnN = toNum(sc.arfcn ?? sc.earfcn ?? sc.nrarfcn ?? sc.uarfcn);
+                    if (arfcnN !== null && arfcnN >= 0 && arfcnN < 2147483647) state.servingCell.arfcn = arfcnN;
+
+                    const tacN = toNum(sc.tac ?? sc.lac);
+                    if (tacN !== null && tacN >= 0 && tacN < 2147483647) state.servingCell.tac = tacN;
+
+                    const taN = toNum(sc.ta ?? sc.timingAdvance);
+                    if (taN !== null && taN >= 0 && taN < 2147483647) state.servingCell.ta = taN;
+
+                    const rsrpN = toNum(sc.rsrp ?? sc.dbm ?? sc.ssRsrp ?? data.rsrp);
+                    const rsrqN = toNum(sc.rsrq ?? sc.ssRsrq ?? data.rsrq);
+                    const sinrN = toNum(sc.sinr ?? sc.rssnr ?? sc.ssSinr ?? data.sinr);
+                    const rssiN = toNum(sc.rssi ?? data.rssi);
+
+                    if (rsrpN !== null && rsrpN < 0 && rsrpN > -160) state.rf.rsrp = rsrpN;
+                    if (rsrqN !== null && rsrqN <= 5 && rsrqN > -50) state.rf.rsrq = rsrqN;
+                    if (sinrN !== null && sinrN > -40 && sinrN < 60) state.rf.sinr = sinrN;
+                    if (rssiN !== null && rssiN < 0 && rssiN > -150) state.rf.rssi = rssiN;
+                    else if (typeof state.rf.rsrp === 'number' && state.rf.rssi === null) state.rf.rssi = state.rf.rsrp + 22;
+                }
+
+                if (Array.isArray(data.neighbors)) {
+                    state.neighbors = data.neighbors;
+                }
+
+                state.sampleCount = (state.sampleCount || 0) + 1;
+
+                state.history = Array.isArray(state.history) ? state.history : [];
+                state.history.push({
+                    rsrp: typeof state.rf.rsrp === 'number' ? state.rf.rsrp : -95,
+                    rssi: typeof state.rf.rssi === 'number' ? state.rf.rssi : -75,
+                    sinr: typeof state.rf.sinr === 'number' ? state.rf.sinr : 5,
+                    ts: Date.now()
+                });
+                if (state.history.length > (typeof MAX_HISTORY === 'number' ? MAX_HISTORY : 90)) {
+                    state.history.shift();
+                }
+
+                state.liveSamples = Array.isArray(state.liveSamples) ? state.liveSamples : [];
+                state.liveSamples.push({
+                    timestamp: new Date().toISOString(),
+                    rat: state.activeRat,
+                    tech: state.servingCell.tech,
+                    band: state.servingCell.band,
+                    plmn: state.servingCell.plmn,
+                    cell_id: state.servingCell.pci,
+                    arfcn: state.servingCell.arfcn,
+                    tac: state.servingCell.tac,
+                    rsrp: state.rf.rsrp,
+                    rsrq: state.rf.rsrq,
+                    sinr: state.rf.sinr,
+                    rssi: state.rf.rssi
+                });
+                if (state.liveSamples.length > 500) state.liveSamples.shift();
+
+                if (typeof updateLiveUI === 'function') updateLiveUI();
+                if (typeof drawLiveChartOnce === 'function') drawLiveChartOnce();
+            } catch (err) {
+                try { console.error('onRealModemData error:', err); } catch (_e) {}
+            }
+        };
+
+        function updateLiveUI() {
+            document.getElementById('sample-count').textContent = state.sampleCount;
+            document.getElementById('ho-count').textContent = state.hoCount;
+
+            document.getElementById('cell-tech').textContent = state.servingCell.tech;
+            document.getElementById('cell-band').textContent = state.servingCell.band;
+            document.getElementById('cell-plmn').textContent = state.servingCell.plmn;
+            document.getElementById('cell-pci').textContent = state.servingCell.pci;
+            document.getElementById('cell-gnb').textContent = state.servingCell.gnb;
+            document.getElementById('cell-arfcn').textContent = state.servingCell.arfcn;
+            document.getElementById('cell-tac').textContent = state.servingCell.tac;
+            document.getElementById('cell-bw').textContent = state.servingCell.band;
+            document.getElementById('cell-ta').textContent = state.servingCell.ta > 0 ? `${state.servingCell.ta} (~${state.servingCell.ta * 15}m)` : '0';
+            const imsiCellEl = document.getElementById('rt-inline-imsi');
+            if (imsiCellEl) imsiCellEl.textContent = state.imsi || '---';
+
+            if (state.activeRat === '3G') {
+                document.getElementById('kpi1-name').textContent = 'RSCP';
+                document.getElementById('kpi2-name').textContent = 'Ec/No';
+            } else if (state.activeRat === '2G') {
+                document.getElementById('kpi1-name').textContent = 'RxLev';
+                document.getElementById('kpi2-name').textContent = 'BER';
+            } else {
+                document.getElementById('kpi1-name').textContent = 'RSRP';
+                document.getElementById('kpi2-name').textContent = 'RSRQ';
+            }
+
+            if (state.rf.rsrp !== null) {
+                const rsrpEl = document.getElementById('val-rsrp');
+                rsrpEl.textContent = Number(state.rf.rsrp).toFixed(1);
+                const pct = Math.min(100, Math.max(0, ((state.rf.rsrp + 130) / 70) * 100));
+                document.getElementById('bar-rsrp').style.width = pct + '%';
+                const b = document.getElementById('rsrp-badge');
+                if (state.rf.rsrp >= -90) {
+                    rsrpEl.className = 'text-base font-black text-emerald-400 mono';
+                    b.className = 'text-[9px] px-1 rounded bg-emerald-500/20 text-emerald-400';
+                    b.textContent = 'מצוין';
+                } else if (state.rf.rsrp >= -105) {
+                    rsrpEl.className = 'text-base font-black text-amber-400 mono';
+                    b.className = 'text-[9px] px-1 rounded bg-amber-500/20 text-amber-400';
+                    b.textContent = 'בינוני';
+                } else {
+                    rsrpEl.className = 'text-base font-black text-rose-400 mono';
+                    b.className = 'text-[9px] px-1 rounded bg-rose-500/20 text-rose-400';
+                    b.textContent = 'חלש';
+                }
+            }
+
+            if (state.rf.rsrq !== null) {
+                document.getElementById('val-rsrq').textContent = Number(state.rf.rsrq).toFixed(1);
+                document.getElementById('bar-rsrq').style.width = Math.min(100, Math.max(0, ((state.rf.rsrq + 20) / 17) * 100)) + '%';
+            }
+            if (state.rf.sinr !== null && state.rf.sinr !== undefined && !Number.isNaN(Number(state.rf.sinr))) {
+                document.getElementById('val-sinr').textContent = Number(state.rf.sinr).toFixed(1);
+                document.getElementById('bar-sinr').style.width = Math.min(100, Math.max(0, ((state.rf.sinr + 10) / 40) * 100)) + '%';
+            } else {
+                document.getElementById('val-sinr').textContent = '--';
+                document.getElementById('bar-sinr').style.width = '0%';
+            }
+            if (state.rf.rssi !== null) {
+                document.getElementById('val-rssi').textContent = Number(state.rf.rssi).toFixed(1);
+                document.getElementById('bar-rssi').style.width = Math.min(100, Math.max(0, ((state.rf.rssi + 115) / 65) * 100)) + '%';
+            }
+
+            document.getElementById('neighbor-count').textContent = `${state.neighbors.length} cells`;
+            const tbody = document.getElementById('neighbors-tbody');
+            if (state.neighbors.length > 0) {
+                tbody.innerHTML = state.neighbors.map(n => {
+                    const diff = (state.rf.rsrp !== null && n.rsrp !== undefined) ? (n.rsrp - state.rf.rsrp).toFixed(1) : '--';
+                    const diffClass = parseFloat(diff) > 0 ? 'text-emerald-400 font-bold' : 'text-slate-400';
+                    return `
+                        <tr>
+                            <td class="py-0.5 px-1 font-bold text-white">${n.pci}</td>
+                            <td class="py-0.5 px-1 text-slate-300">${n.tech}</td>
+                            <td class="py-0.5 px-1 text-slate-400">${n.arfcn}</td>
+                            <td class="py-0.5 px-1 text-cyan-300">${n.rsrp} dBm</td>
+                            <td class="py-0.5 px-1 ${diffClass}">${parseFloat(diff) > 0 ? '+' + diff : diff}</td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+        }
+
+        const canvas = document.getElementById('rfChart');
+        const ctx = canvas.getContext('2d');
+        function renderLiveChart() {
+            const dpr = window.devicePixelRatio || 1;
+            const rect = canvas.getBoundingClientRect();
+            if (rect.width > 0 && (canvas.width !== rect.width * dpr || canvas.height !== rect.height * dpr)) {
+                canvas.width = rect.width * dpr;
+                canvas.height = rect.height * dpr;
+            }
+            ctx.save();
+            ctx.scale(dpr, dpr);
+            const w = rect.width;
+            const h = rect.height;
+            ctx.clearRect(0, 0, w, h);
+
+            ctx.strokeStyle = '#1e293b';
+            ctx.lineWidth = 1;
+            for (let i = 1; i < 3; i++) {
+                ctx.beginPath();
+                ctx.moveTo(0, (h / 3) * i);
+                ctx.lineTo(w, (h / 3) * i);
+                ctx.stroke();
+            }
+
+            if (state.history.length > 1) {
+                const stepX = w / (MAX_HISTORY - 1);
+                const drawLine = (key, minV, maxV, col) => {
+                    ctx.beginPath();
+                    ctx.strokeStyle = col;
+                    ctx.lineWidth = 1.8;
+                    state.history.forEach((pt, idx) => {
+                        const norm = Math.min(1, Math.max(0, (pt[key] - minV) / (maxV - minV)));
+                        const x = idx * stepX;
+                        const y = h - norm * (h - 12) - 6;
+                        if (idx === 0) ctx.moveTo(x, y);
+                        else ctx.lineTo(x, y);
+                    });
+                    ctx.stroke();
+                };
+                drawLine('rsrp', -135, -55, '#34d399');
+                drawLine('rssi', -115, -40, '#fbbf24');
+                drawLine('sinr', -10, 30, '#818cf8');
+            }
+            ctx.restore();
+            requestAnimationFrame(renderLiveChart);
+        }
+
+        function exportLogs(format) {
+            const samples = getActiveSamples();
+            if (samples.length === 0) {
+                showToast('אין נתונים לייצוא', 'המתן לקבלת דגימות מהמודם או טען קובץ.', 'warn');
+                return;
+            }
+            let content = '';
+            let mime = '';
+            let filename = '';
+            if (format === 'csv') {
+                const headers = ['timestamp', 'rat', 'tech', 'band', 'plmn', 'cell_id', 'gnb', 'arfcn', 'tac', 'rsrp', 'rsrq', 'sinr', 'rssi'];
+                const rows = samples.map(s => headers.map(h => s[h] ?? '').join(','));
+                content = [headers.join(','), ...rows].join('\n');
+                mime = 'text/csv;charset=utf-8;';
+                filename = `cellular_log_${Date.now()}.csv`;
+            } else {
+                content = JSON.stringify({ exportedAt: new Date().toISOString(), samples, events: state.logs }, null, 2);
+                mime = 'application/json;charset=utf-8;';
+                filename = `cellular_log_${Date.now()}.json`;
+            }
+
+            if (window.AndroidModem && window.AndroidModem.saveExportFile) {
+                window.AndroidModem.saveExportFile(filename, content);
+                showToast('הקובץ נשמר בהצלחה', `נשמר בתיקיית Downloads: ${filename}`);
+            } else {
+                const blob = new Blob([content], { type: mime });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                a.click();
+                URL.revokeObjectURL(url);
+                showToast('הקובץ יוצא בהצלחה', filename);
+            }
+        }
+
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const text = e.target.result;
+                try {
+                    let parsedSamples = [];
+                    if (file.name.endsWith('.json')) {
+                        const obj = JSON.parse(text);
+                        parsedSamples = Array.isArray(obj) ? obj : (obj.samples || []);
+                        if (obj.events && Array.isArray(obj.events)) {
+                            state.logs = obj.events;
+                        }
+                    } else {
+                        const lines = text.trim().split(/\r?\n/);
+                        const headers = lines[0].split(',').map(h => h.trim());
+                        for (let i = 1; i < lines.length; i++) {
+                            const cols = lines[i].split(',');
+                            if (cols.length < 3) continue;
+                            const row = {};
+                            headers.forEach((h, idx) => {
+                                const val = cols[idx] ? cols[idx].trim() : '';
+                                row[h] = ['rsrp', 'rsrq', 'sinr', 'rssi', 'cell_id', 'arfcn'].includes(h) && val !== '' && !isNaN(val)
+                                    ? Number(val)
+                                    : val;
+                            });
+                            parsedSamples.push(row);
+                        }
+                    }
+
+                    if (parsedSamples.length === 0) {
+                        showToast('קובץ ריק או לא תקין', 'לא נמצאו שורות מדידה בקובץ.', 'warn');
+                        return;
+                    }
+
+                    state.importedSamples = parsedSamples;
+                    state.importedFileName = file.name;
+                    document.getElementById('active-dataset-label').textContent = `קובץ מיובא: ${file.name} (${parsedSamples.length} רשומות)`;
+                    document.getElementById('btn-reset-live').classList.remove('hidden');
+
+                    state.logs = parsedSamples.slice(-200).reverse().map((s, idx) => ({
+                        id: idx,
+                        timestamp: (s.timestamp || '').split('T').pop().replace('Z', ''),
+                        category: 'RF',
+                        direction: 'FILE',
+                        title: `${s.tech || s.rat || 'CELL'} (${s.band || ''}) PCI:${s.cell_id ?? '--'}`,
+                        summary: `RSRP: ${s.rsrp} dBm | RSRQ: ${s.rsrq} dB | SINR: ${s.sinr} dB`
+                    }));
+                    renderLogs();
+                    showToast('הקובץ נטען בהצלחה', `${parsedSamples.length} דגימות מוכנות לניתוח וגרפים.`);
+                } catch (err) {
+                    showToast('שגיאה בקריאת הקובץ', err.message, 'warn');
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function resetToLiveDataset() {
+            state.importedSamples = null;
+            state.importedFileName = null;
+            document.getElementById('active-dataset-label').textContent = 'הקלטה חיה מהמכשיר';
+            document.getElementById('btn-reset-live').classList.add('hidden');
+            showToast('חזרה לנתונים חיים', 'הניתוח והלוג מציגים כעת את נתוני המכשיר בזמן אמת.');
+        }
+
+        function computeLogSummary() {
+            const samples = getActiveSamples();
+            if (!samples || samples.length === 0) return null;
+
+            const rsrps = samples.map(s => Number(s.rsrp)).filter(v => !isNaN(v) && v < 0);
+            const sinrs = samples.map(s => Number(s.sinr)).filter(v => !isNaN(v));
+            const rsrqs = samples.map(s => Number(s.rsrq)).filter(v => !isNaN(v) && v <= 0);
+
+            const avg = arr => arr.length ? (arr.reduce((a, b) => a + b, 0) / arr.length) : null;
+            const avgRsrp = avg(rsrps);
+            const minRsrp = rsrps.length ? Math.min(...rsrps) : null;
+            const maxRsrp = rsrps.length ? Math.max(...rsrps) : null;
+
+            const avgSinr = avg(sinrs);
+            const minSinr = sinrs.length ? Math.min(...sinrs) : null;
+            const maxSinr = sinrs.length ? Math.max(...sinrs) : null;
+
+            let hoTransitions = 0;
+            let prevPci = null;
+            const cellCounts = {};
+            const ratCounts = {};
+            const bandCounts = {};
+
+            samples.forEach(s => {
+                const pci = s.cell_id;
+                if (pci !== undefined && pci !== null && pci !== '---') {
+                    if (prevPci !== null && pci !== prevPci) hoTransitions++;
+                    prevPci = pci;
+                    cellCounts[pci] = (cellCounts[pci] || 0) + 1;
+                }
+                const rat = s.tech || s.rat || 'Unknown';
+                ratCounts[rat] = (ratCounts[rat] || 0) + 1;
+                if (s.band) bandCounts[s.band] = (bandCounts[s.band] || 0) + 1;
+            });
+
+            const domRat = Object.entries(ratCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || '---';
+
+            return {
+                totalSamples: samples.length,
+                rsrps,
+                avgRsrp, minRsrp, maxRsrp,
+                avgSinr, minSinr, maxSinr,
+                avgRsrq: avg(rsrqs),
+                hoTransitions,
+                uniqueCells: Object.keys(cellCounts).length,
+                cellCounts,
+                ratCounts,
+                bandCounts,
+                domRat
+            };
+        }
+
+        function runLogAnalytics() {
+            const stats = computeLogSummary();
+            document.getElementById('analytics-subtitle').textContent = state.importedFileName
+                ? `מנתח קובץ: ${state.importedFileName}`
+                : `מנתח הקלטה חיה (${state.liveSamples.length} דגימות)`;
+
+            if (!stats) {
+                document.getElementById('analytics-conclusions').innerHTML = '<li>אין עדיין מספיק דגימות. המתן מספר שניות לקליטה מהמכשיר או טען קובץ בלשונית הלוג.</li>';
+                return;
+            }
+
+            document.getElementById('stat-avg-rsrp').textContent = stats.avgRsrp !== null ? `${stats.avgRsrp.toFixed(1)} dBm` : '---';
+            document.getElementById('stat-minmax-rsrp').textContent = stats.minRsrp !== null ? `${stats.minRsrp} / ${stats.maxRsrp} dBm` : '--';
+            document.getElementById('stat-avg-sinr').textContent = stats.avgSinr !== null ? `${stats.avgSinr.toFixed(1)} dB` : '---';
+            document.getElementById('stat-minmax-sinr').textContent = stats.minSinr !== null ? `${stats.minSinr} / ${stats.maxSinr} dB` : '--';
+            document.getElementById('stat-ho-total').textContent = stats.hoTransitions;
+            document.getElementById('stat-unique-cells').textContent = `תאים ייחודיים: ${stats.uniqueCells}`;
+            document.getElementById('stat-dom-rat').textContent = stats.domRat;
+            document.getElementById('stat-total-samples').textContent = `סה"כ דגימות: ${stats.totalSamples}`;
+
+            const conclusions = [];
+            if (stats.avgRsrp !== null) {
+                if (stats.avgRsrp >= -90) {
+                    conclusions.push(`עוצמת הקליטה הממוצעת מצוינת (${stats.avgRsrp.toFixed(1)} dBm) — המכשיר נמצא בכיסוי קרוב וישיר לאנטנה.`);
+                } else if (stats.avgRsrp >= -105) {
+                    conclusions.push(`עוצמת הקליטה בינונית (${stats.avgRsrp.toFixed(1)} dBm) — ייתכנו ירידות קצב בתוך מבנים סגורים.`);
+                } else {
+                    conclusions.push(`אזהרת כיסוי חלש (${stats.avgRsrp.toFixed(1)} dBm) — המכשיר פועל בקצה טווח האנטנה ונדרש להשקיע הספק שידור גבוה.`);
+                }
+            }
+
+            if (stats.avgSinr !== null) {
+                if (stats.avgSinr < 3) {
+                    conclusions.push(`יחס אות לרעש נמוך (SINR ממוצע ${stats.avgSinr.toFixed(1)} dB) — מעיד על הפרעות בין-תאיות או עומס משתמשים גבוה בתא למרות עוצמת האות.`);
+                } else if (stats.avgSinr >= 13) {
+                    conclusions.push(`איכות ספקטרלית נקייה (SINR ממוצע ${stats.avgSinr.toFixed(1)} dB) — תנאים אידיאליים לאפנון גבוה (256QAM) ומהירות גלישה מרבית.`);
+                }
+            }
+
+            const hoRate = stats.totalSamples > 0 ? (stats.hoTransitions / stats.totalSamples) : 0;
+            if (stats.hoTransitions > 4 && hoRate > 0.15) {
+                conclusions.push(`זוהה חוסר יציבות ומעברי תא תכופים (${stats.hoTransitions} מעברים בין ${stats.uniqueCells} תאים) — ייתכן מצב Ping-Pong בין אנטנות סמוכות.`);
+            } else {
+                conclusions.push(`יציבות החיבור לתא תקינה (${stats.hoTransitions} מעברי תא על פני ${stats.totalSamples} דגימות).`);
+            }
+
+            const bandsList = Object.entries(stats.bandCounts).map(([b, c]) => `${b} (${Math.round(c / stats.totalSamples * 100)}%)`).join(', ');
+            if (bandsList) {
+                conclusions.push(`התפלגות תדרים פעילים: ${bandsList}.`);
+            }
+
+            document.getElementById('analytics-conclusions').innerHTML = conclusions.map(c => `<li>${c}</li>`).join('');
+
+            drawRsrpHistogram(stats.rsrps);
+            drawRatDistributionChart(stats.ratCounts, stats.cellCounts);
+        }
+
+        function drawRsrpHistogram(rsrps) {
+            const c = document.getElementById('histCanvas');
+            const ctx = c.getContext('2d');
+            const dpr = window.devicePixelRatio || 1;
+            const rect = c.getBoundingClientRect();
+            c.width = rect.width * dpr;
+            c.height = rect.height * dpr;
+            ctx.scale(dpr, dpr);
+            const w = rect.width, h = rect.height;
+            ctx.clearRect(0, 0, w, h);
+
+            if (!rsrps.length) return;
+
+            const bins = [
+                { label: '> -80', min: -80, max: 0, count: 0, color: '#10b981' },
+                { label: '-80..-90', min: -90, max: -80, count: 0, color: '#34d399' },
+                { label: '-90..-100', min: -100, max: -90, count: 0, color: '#38bdf8' },
+                { label: '-100..-110', min: -110, max: -100, count: 0, color: '#fbbf24' },
+                { label: '< -110', min: -200, max: -110, count: 0, color: '#f43f5e' }
+            ];
+
+            rsrps.forEach(v => {
+                for (const b of bins) {
+                    if (v >= b.min && v < b.max) { b.count++; break; }
+                }
+            });
+
+            const maxCount = Math.max(1, ...bins.map(b => b.count));
+            const padX = 16, padBottom = 22, padTop = 18;
+            const barW = (w - padX * 2) / bins.length - 10;
+
+            bins.forEach((b, i) => {
+                const barH = ((b.count / maxCount) * (h - padBottom - padTop));
+                const x = padX + i * ((w - padX * 2) / bins.length) + 5;
+                const y = h - padBottom - barH;
+
+                ctx.fillStyle = b.color;
+                ctx.fillRect(x, y, barW, barH);
+
+                ctx.fillStyle = '#e2e8f0';
+                ctx.font = 'bold 10px JetBrains Mono';
+                ctx.textAlign = 'center';
+                ctx.fillText(b.count, x + barW / 2, y - 4);
+
+                ctx.fillStyle = '#94a3b8';
+                ctx.font = '10px JetBrains Mono';
+                ctx.fillText(b.label, x + barW / 2, h - 6);
+            });
+        }
+
+        function drawRatDistributionChart(ratCounts, cellCounts) {
+            const c = document.getElementById('ratChartCanvas');
+            const ctx = c.getContext('2d');
+            const dpr = window.devicePixelRatio || 1;
+            const rect = c.getBoundingClientRect();
+            c.width = rect.width * dpr;
+            c.height = rect.height * dpr;
+            ctx.scale(dpr, dpr);
+            const w = rect.width, h = rect.height;
+            ctx.clearRect(0, 0, w, h);
+
+            const entries = Object.entries(cellCounts).sort((a, b) => b[1] - a[1]).slice(0, 6);
+            if (!entries.length) return;
+
+            const total = entries.reduce((acc, e) => acc + e[1], 0);
+            const rowH = Math.min(24, (h - 16) / entries.length);
+
+            entries.forEach(([pci, count], idx) => {
+                const pct = Math.round((count / total) * 100);
+                const y = 10 + idx * rowH;
+                const maxBarW = w - 130;
+                const barW = (count / total) * maxBarW;
+
+                ctx.fillStyle = '#cbd5e1';
+                ctx.font = 'bold 11px JetBrains Mono';
+                ctx.textAlign = 'left';
+                ctx.fillText(`PCI ${pci}`, 8, y + 13);
+
+                ctx.fillStyle = '#1e293b';
+                ctx.fillRect(80, y + 3, maxBarW, 13);
+
+                ctx.fillStyle = idx === 0 ? '#06b6d4' : '#6366f1';
+                ctx.fillRect(80, y + 3, barW, 13);
+
+                ctx.fillStyle = '#f8fafc';
+                ctx.fillText(`${pct}% (${count})`, 85 + barW, y + 13);
+            });
+        }
+
+        function setAiPreset(text) {
+            document.getElementById('ai-user-prompt').value = text;
+        }
+
+        function buildAiPayloadPrompt() {
+            const userPrompt = document.getElementById('ai-user-prompt').value.trim();
+            const stats = computeLogSummary();
+            const samples = getActiveSamples();
+
+            if (!stats || samples.length === 0) {
+                return null;
+            }
+
+            const step = Math.max(1, Math.floor(samples.length / 40));
+            const sampledRows = [];
+            for (let i = 0; i < samples.length; i += step) {
+                const s = samples[i];
+                sampledRows.push(`${s.timestamp || ''} | ${s.tech || s.rat} | Band:${s.band || '-'} | PCI:${s.cell_id} | RSRP:${s.rsrp} | RSRQ:${s.rsrq} | SINR:${s.sinr}`);
+            }
+
+            return `הנחיית המשתמש:
+${userPrompt}
+
+--- סיכום טלמטריית רדיו מהמכשיר (${state.importedFileName || 'הקלטה חיה'}) ---
+סה"כ דגימות: ${stats.totalSamples}
+טכנולוגיה דומיננטית: ${stats.domRat}
+RSRP (עוצמת אות): ממוצע ${stats.avgRsrp?.toFixed(1)} dBm (טווח ${stats.minRsrp} עד ${stats.maxRsrp} dBm)
+SINR (איכות אות): ממוצע ${stats.avgSinr?.toFixed(1)} dB (טווח ${stats.minSinr} עד ${stats.maxSinr} dB)
+מעברי תא (Handovers): ${stats.hoTransitions} מעברים בין ${stats.uniqueCells} תאים ייחודיים
+התפלגות תאים (PCI: דגימות): ${JSON.stringify(stats.cellCounts)}
+התפלגות תדרים: ${JSON.stringify(stats.bandCounts)}
+
+--- דגימות נבחרות לאורך ציר הזמן ---
+${sampledRows.join('\n')}`;
+        }
+
+        function copyPromptWithLogData() {
+            const fullText = buildAiPayloadPrompt();
+            if (!fullText) {
+                showToast('אין נתוני לוג', 'אסוף דגימות או טען קובץ לוג לפני הפקת הפרומפט.', 'warn');
+                return;
+            }
+            navigator.clipboard.writeText(fullText);
+            document.getElementById('ai-output-box').textContent = fullText;
+            document.getElementById('ai-status-lbl').textContent = 'הועתק ללוח!';
+            showToast('הפרומפט והנתונים הועתקו', 'הדבק כעת בצ\'אט של Gemini או ChatGPT לקבלת ניתוח מלא.');
+        }
+
+        async function runDirectGeminiAnalysis() {
+            const fullText = buildAiPayloadPrompt();
+            if (!fullText) {
+                showToast('אין נתוני לוג', 'אסוף דגימות או טען קובץ לוג תחילה.', 'warn');
+                return;
+            }
+
+            const apiKey = document.getElementById('gemini-api-key').value.trim();
+            if (!apiKey) {
+                copyPromptWithLogData();
+                showToast('לא הוזן מפתח API', 'הפרומפט המלא עם נתוני הלוג הועתק ללוח שלך להדבקה ישירה.', 'info');
+                return;
+            }
+
+            const outBox = document.getElementById('ai-output-box');
+            const statusLbl = document.getElementById('ai-status-lbl');
+            outBox.textContent = 'מבצע ניתוח AI על נתוני הרדיו... אנא המתן...';
+            statusLbl.textContent = 'מעבד...';
+
+            try {
+                const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: "אתה מהנדס תקשורת סלולרית מומחה (RF & 5G/4G Optimization). ענה בעברית ברורה ומקצועית.\n\n" + fullText }] }]
+                    })
+                });
+                const json = await resp.json();
+                if (json.error) {
+                    throw new Error(json.error.message || 'API Error');
+                }
+                const answer = json.candidates?.[0]?.content?.parts?.[0]?.text || 'לא התקבלה תשובה.';
+                outBox.textContent = answer;
+                statusLbl.textContent = 'הושלם בהצלחה';
+            } catch (err) {
+                outBox.textContent = `שגיאה בחיבור ל-Gemini API: ${err.message}\n\nהפרומפט המלא הוכן עבורך למטה להעתקה ידנית:\n\n${fullText}`;
+                statusLbl.textContent = 'שגיאה';
+            }
+        }
+
+        requestAnimationFrame(renderLiveChart);
+    </script>
+
+<style>
+
+<script>
+
+
+
+
+
+(function() {
+  
+
+
+
+window.rtSwitchToMapTab = function() {
+  try {
+    if (typeof window.switchTab === "function") {
+      window.switchTab("map");
+      return;
+    }
+  } catch (_e) {}
+  document.querySelectorAll(".tab-view").forEach(function(v) { v.classList.add("hidden"); });
+  var mv = document.getElementById("view-map");
+  if (mv) mv.classList.remove("hidden");
+  if (typeof window.rtRenderIsraelMap === "function") window.rtRenderIsraelMap();
+};
+
+(function attachLiveRfLogs() {
+  if (window.__rtRfLogAttached) return;
+  window.__rtRfLogAttached = true;
+  var prev = window.onRealModemData;
+  var lastTs = 0;
+  window.onRealModemData = function(payload) {
+    var out;
+    if (typeof prev === "function") {
+      out = prev.apply(this, arguments);
+    }
+    try {
+      var now = Date.now();
+      if (now - lastTs >= 1500 && typeof window.addLog === "function" && window.state && window.state.rf) {
+        lastTs = now;
+        var sc = window.state.servingCell || {};
+        var rf = window.state.rf || {};
+        var rsrp = (typeof rf.rsrp === "number") ? rf.rsrp.toFixed(1) + " dBm" : "--";
+        var rsrq = (typeof rf.rsrq === "number") ? rf.rsrq.toFixed(1) + " dB" : "--";
+        var sinr = (typeof rf.sinr === "number") ? rf.sinr.toFixed(1) + " dB" : "--";
+        var title = (sc.tech || window.state.activeRat || "CELL") + " PCI:" + (sc.pci != null ? sc.pci : "--") + " | " + (sc.band || "---");
+        window.addLog("RF", "MODEM", title, "RSRP: " + rsrp + " | RSRQ: " + rsrq + " | SINR: " + sinr);
+      }
+    } catch (_e) {}
+    return out;
+  };
+})();
+
+window.rtSwitchToMapTab = function() {
+  if (typeof window.switchTab === "function") {
+    window.switchTab("map");
+  }
+};
+
+if (typeof window.onRealModemData === "function" && !window.onRealModemData._rtRfLogHook) {
+  const prevModemHandler = window.onRealModemData;
+  let lastRfLogTs = 0;
+  window.onRealModemData = function(payload) {
+    const res = prevModemHandler.apply(this, arguments);
+    try {
+      const now = Date.now();
+      if (now - lastRfLogTs >= 2000 && typeof addLog === "function" && window.state && window.state.rf) {
+        lastRfLogTs = now;
+        const sc = window.state.servingCell || {};
+        const rf = window.state.rf;
+        const rsrpTxt = typeof rf.rsrp === "number" ? `${rf.rsrp.toFixed(1)} dBm` : "--";
+        const rsrqTxt = typeof rf.rsrq === "number" ? `${rf.rsrq.toFixed(1)} dB` : "--";
+        const sinrTxt = typeof rf.sinr === "number" ? `${rf.sinr.toFixed(1)} dB` : "--";
+        const title = `${sc.tech || window.state.activeRat || "CELL"} PCI:${sc.pci ?? "--"} | ${sc.band || "---"}`;
+        addLog("RF", "MODEM", title, `RSRP: ${rsrpTxt} | RSRQ: ${rsrqTxt} | SINR: ${sinrTxt}`);
+      }
+    } catch (_e) {}
+    return res;
+  };
+  window.onRealModemData._rtRfLogHook = true;
+}
+
+if (window.__rtStableV41) return;
+  window.__rtStableV41 = true;
+
+  const BANDS = {
+    "B1": "2100 MHz (1920-1980 / 2110-2170 MHz)",
+    "B3": "1800 MHz (1710-1785 / 1805-1880 MHz)",
+    "B7": "2600 MHz (2500-2570 / 2620-2690 MHz)",
+    "B8": "900 MHz (880-915 / 925-960 MHz)",
+    "B20": "800 MHz (832-862 / 791-821 MHz)",
+    "B28": "700 MHz (703-748 / 758-803 MHz)",
+    "n28": "700 MHz NR (703-748 / 758-803 MHz)",
+    "n78": "3500 MHz NR (3300-3800 MHz)"
+  };
+
+  function fmtBand(v) {
+    if (!v || String(v).trim() === "---") return "---";
+    const s = String(v).replace(/\)\)+/g, ")").replace(/\(\(+/g, "(").trim();
+    const m = s.match(/\b(n?\d{1,3})\b/i);
+    if (!m) return s;
+    const code = m[1].toLowerCase().startsWith("n") ? "n" + m[1].slice(1) : "B" + m[1];
+    return BANDS[code] ? `${code} (${BANDS[code]})` : s;
+  }
+
+  // Deduplicate extra map/exit buttons once on load
+  function hideExtraControls() {
+    document.querySelectorAll("button").forEach(btn => {
+      if (btn.id === "tab-btn-map" || btn.id === "rt-explicit-exit-btn" || btn.id === "rt-chart-expand-btn") return;
+      const t = (btn.textContent || "").trim();
+      if (t === "מפה" || t === "🗺️ מפה" || t === "יציאה" || t === "4636" || t === "📱 4636") {
+        btn.style.display = "none";
+      }
+    });
+  }
+
+  window.rtTriggerCleanExit = function() {
+    try { if (typeof window.rtPersistFullStateNow === "function") window.rtPersistFullStateNow(); } catch (_e) {}
+    try {
+      if (window.AndroidModem && typeof window.AndroidModem.exitApp === "function") {
+        window.AndroidModem.exitApp();
+        return;
+      }
+    } catch (_e) {}
+    try { window.close(); } catch (_e) {}
+  };
+
+  window.rtOpenHelpWith4636 = function() {
+    let dlg = document.getElementById("rt-help-4636-dlg");
+    if (!dlg) {
+      dlg = document.createElement("div");
+      dlg.id = "rt-help-4636-dlg";
+      dlg.style.cssText = "position:fixed;inset:0;background:rgba(2,6,23,0.86);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;";
+      dlg.innerHTML = `
+            <strong style="font-size:14px;">עזרה ותפריט טכנאי (4636)</strong>
+          <p style="font-size:11px;color:#cbd5e1;margin:0 0 10px 0;">אבחון מתקדם והגדרות מודם (4636) מרוכזים כאן.</p>
+      `;
+      document.body.appendChild(dlg);
+      dlg.addEventListener("click", e => { if (e.target === dlg) dlg.style.display = "none"; });
+      document.getElementById("rt-close-4636-dlg").addEventListener("click", () => { dlg.style.display = "none"; });
+      document.getElementById("rt-open-4636-btn").addEventListener("click", () => {
+        if (typeof openRealDeviceSettings === "function") openRealDeviceSettings();
+      });
+      document.getElementById("rt-open-guide-btn").addEventListener("click", () => {
+        dlg.style.display = "none";
+        if (typeof openHelpCenter === "function") openHelpCenter();
+      });
+    }
+    dlg.style.display = "flex";
+  };
+
+  function ensureMapTab() {
+    if (document.getElementById("view-map")) return;
+    const liveView = document.getElementById("view-live");
+    const host = (liveView && liveView.parentElement) || document.body;
+    const sec = document.createElement("section");
+    sec.id = "view-map";
+    sec.className = "tab-view flex-1 flex flex-col p-2 gap-2 overflow-y-auto hidden";
+    sec.innerHTML = `
+        <strong style="font-size:12px;">מפת ישראל ותחנות בסיס חיה</strong>
+          ממתין למיקום ולתחנה מחוברת...
+    `;
+    if (liveView && liveView.nextSibling) host.insertBefore(sec, liveView.nextSibling);
+    else host.appendChild(sec);
+
+    const towers = [
+      { lat: 31.8044, lon: 34.6553 },
+      { lat: 32.0741, lon: 34.7922 },
+      { lat: 31.7781, lon: 35.1984 },
+      { lat: 32.8012, lon: 34.9896 },
+      { lat: 31.2518, lon: 34.7913 }
+    ];
+    let gps = { lat: 31.8044, lon: 34.6553 };
+    let centered = true;
+
+    function toXY(lat, lon, w, h) {
+      const x = ((lon - 34.1) / (36.0 - 34.1)) * (w - 28) + 14;
+      const y = h - (((lat - 29.4) / (33.4 - 29.4)) * (h - 28) + 14);
+      return { x: Math.max(10, Math.min(w - 10, x)), y: Math.max(10, Math.min(h - 10, y)) };
+    }
+
+    window.rtRenderIsraelMap = function() {
+      const stage = document.getElementById("rt-map-stage");
+      const tip = document.getElementById("rt-map-tooltip");
+      if (!stage || !tip) return;
+      let svg = stage.querySelector("svg");
+      if (!svg) {
+        svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.setAttribute("width", "100%");
+        svg.setAttribute("height", "100%");
+        stage.insertBefore(svg, tip);
+      }
+      const w = stage.clientWidth || 340;
+      const h = stage.clientHeight || 340;
+      svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+      while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+      const ilPoly = [
+        [33.25, 35.55], [32.85, 35.05], [32.08, 34.77], [31.50, 34.45],
+        [31.22, 34.25], [29.52, 34.95], [31.10, 35.38], [32.45, 35.60]
+      ].map(([la, lo]) => {
+        const pt = toXY(la, lo, w, h);
+        return `${pt.x.toFixed(1)},${pt.y.toFixed(1)}`;
+      }).join(" ");
+      const poly = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+      poly.setAttribute("points", ilPoly);
+      poly.setAttribute("fill", "#0c233d");
+      poly.setAttribute("stroke", "#2563eb");
+      poly.setAttribute("stroke-width", "1.5");
+      svg.appendChild(poly);
+
+      const st = window.state || {};
+      const sc = st.servingCell || {};
+      const rf = st.rf || {};
+      const pci = sc.pci ?? sc.physicalCellId ?? "-";
+      const cid = sc.eci ?? sc.nci ?? sc.cid ?? "-";
+      const band = fmtBand(sc.band || sc.earfcn || "-");
+      const rsrp = rf.rsrp ?? sc.rsrp ?? "-";
+      const sinr = rf.sinr ?? sc.sinr ?? "-";
+
+      const uPt = centered ? { x: w * 0.45, y: h * 0.56 } : toXY(gps.lat, gps.lon, w, h);
+      const tPt = toXY(towers[0].lat, towers[0].lon, w, h);
+
+      towers.forEach(tw => {
+        const pt = centered
+          ? { x: uPt.x + (tw.lon - gps.lon) * 150, y: uPt.y - (tw.lat - gps.lat) * 150 }
+          : toXY(tw.lat, tw.lon, w, h);
+        const dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        dot.setAttribute("cx", String(pt.x)); dot.setAttribute("cy", String(pt.y));
+        dot.setAttribute("r", "5"); dot.setAttribute("fill", "#38bdf8");
+        svg.appendChild(dot);
+      });
+
+      const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      line.setAttribute("x1", String(uPt.x)); line.setAttribute("y1", String(uPt.y));
+      line.setAttribute("x2", String(tPt.x)); line.setAttribute("y2", String(tPt.y));
+      line.setAttribute("stroke", "#f97316"); line.setAttribute("stroke-width", "3.5");
+      svg.appendChild(line);
+
+      const me = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      me.setAttribute("cx", String(uPt.x)); me.setAttribute("cy", String(uPt.y));
+      me.setAttribute("r", "7"); me.setAttribute("fill", "#22c55e");
+      me.setAttribute("stroke", "#ffffff"); me.setAttribute("stroke-width", "2");
+      svg.appendChild(me);
+
+      tip.style.top = `${Math.max(8, Math.min(h - 94, uPt.y - 76))}px`;
+      tip.style.left = `${Math.max(8, Math.min(w - 255, uPt.x - 110))}px`;
+      tip.innerHTML = `
+      `;
+    };
+
+    document.getElementById("rt-map-center-now").addEventListener("click", () => {
+      centered = true;
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(p => {
+          gps = { lat: p.coords.latitude, lon: p.coords.longitude };
+          window.rtRenderIsraelMap();
+        }, () => window.rtRenderIsraelMap(), { enableHighAccuracy: true, timeout: 4000 });
+      } else {
+        window.rtRenderIsraelMap();
+      }
+    });
+  }
+
+  const baseSwitchTab = window.switchTab;
+  window.switchTab = function(tabName) {
+    ensureMapTab();
+    const mv = document.getElementById("view-map");
+    if (tabName === "map") {
+      document.querySelectorAll(".tab-view").forEach(v => v.classList.add("hidden"));
+      document.querySelectorAll(".tab-btn").forEach(b => {
+        b.className = "tab-btn py-1 rounded-md text-slate-400 hover:text-white transition";
+      });
+      if (mv) mv.classList.remove("hidden");
+      const mb = document.getElementById("tab-btn-map");
+      if (mb) mb.className = "tab-btn py-1 rounded-md bg-cyan-600 text-white transition";
+      window.rtRenderIsraelMap();
+      return;
+    }
+    if (mv) mv.classList.add("hidden");
+    if (typeof baseSwitchTab === "function") baseSwitchTab(tabName);
+  };
+
+  // Feed live chart from state.history / state.liveSamples and draw once per second while #view-live is open
+  function drawLiveChartOnce() {
+    const liveView = document.getElementById("view-live");
+    if (!liveView || liveView.classList.contains("hidden")) return;
+    const canvas = document.getElementById("rfChart");
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const rect = canvas.getBoundingClientRect();
+    const w = Math.round(rect.width || canvas.parentElement?.clientWidth || 320);
+    const h = Math.round(rect.height || canvas.parentElement?.clientHeight || 130);
+    if (w <= 0 || h <= 0) return;
+
+    if (canvas.width !== w * dpr || canvas.height !== h * dpr) {
+      canvas.width = w * dpr;
+      canvas.height = h * dpr;
+    }
+
+    ctx.save();
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, w, h);
+
+    ctx.strokeStyle = "#1e293b";
+    ctx.lineWidth = 1;
+    ctx.font = "9px monospace";
+    ctx.fillStyle = "#94a3b8";
+    [
+      { r: 0.18, l: "-55 dBm" },
+      { r: 0.50, l: "-95 dBm" },
+      { r: 0.82, l: "-135 dBm" }
+    ].forEach(t => {
+      const y = Math.round(h * t.r);
+      ctx.beginPath();
+      ctx.moveTo(42, y); ctx.lineTo(w - 6, y);
+      ctx.stroke();
+      ctx.fillText(t.l, 2, y + 3);
+    });
+    ctx.fillText("X: דגימות אחרונות", Math.max(46, w - 98), h - 3);
+
+    const st = window.state || {};
+    let series = Array.isArray(st.history) && st.history.length > 0 ? st.history : [];
+    if (series.length === 0 && Array.isArray(st.liveSamples) && st.liveSamples.length > 0) {
+      series = st.liveSamples.slice(-90).map(s => ({
+        rsrp: typeof s.rsrp === "number" ? s.rsrp : s?.rf?.rsrp,
+        rssi: typeof s.rssi === "number" ? s.rssi : s?.rf?.rssi,
+        sinr: typeof s.sinr === "number" ? s.sinr : s?.rf?.sinr
+      }));
+    }
+
+    if (series.length > 1) {
+      const plotW = Math.max(20, w - 48);
+      const plotH = Math.max(20, h - 18);
+      const stepX = plotW / Math.max(1, series.length - 1);
+      const drawLine = (key, minV, maxV, col) => {
+        ctx.beginPath();
+        ctx.strokeStyle = col;
+        ctx.lineWidth = 1.8;
+        let started = false;
+        series.forEach((pt, i) => {
+          const val = pt[key];
+          if (typeof val !== "number" || Number.isNaN(val)) return;
+          const norm = Math.min(1, Math.max(0, (val - minV) / (maxV - minV)));
+          const x = 44 + i * stepX;
+          const y = 6 + (1 - norm) * (plotH - 8);
+          if (!started) { ctx.moveTo(x, y); started = true; }
+          else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+      };
+      drawLine("rsrp", -135, -55, "#34d399");
+      drawLine("rssi", -115, -40, "#fbbf24");
+      drawLine("sinr", -10, 30, "#818cf8");
+    }
+    ctx.restore();
+  }
+
+  function addSingleChartExpandBtn() {
+    const canvas = document.getElementById("rfChart");
+    const chartSec = canvas ? canvas.closest("section") : null;
+    if (!chartSec || document.getElementById("rt-chart-expand-btn")) return;
+    const hdr = chartSec.querySelector("div");
+    if (!hdr) return;
+    const btn = document.createElement("button");
+    btn.id = "rt-chart-expand-btn";
+    btn.type = "button";
+    btn.textContent = "הגדל גרף";
+    btn.style.cssText = "background:#1e293b;color:#e2e8f0;border:1px solid #475569;border-radius:5px;padding:1px 7px;font-size:10px;cursor:pointer;";
+    btn.addEventListener("click", function() {
+      const big = chartSec.dataset.rtExpanded === "1";
+      chartSec.dataset.rtExpanded = big ? "0" : "1";
+      chartSec.style.minHeight = big ? "85px" : "250px";
+      chartSec.style.flex = big ? "1 1 0%" : "0 0 250px";
+      this.textContent = big ? "הגדל גרף" : "צמצם גרף";
+      setTimeout(drawLiveChartOnce, 50);
+    });
+    hdr.appendChild(btn);
+  }
+
+  function initOnce() {
+    ensureMapTab();
+    hideExtraControls();
+    addSingleChartExpandBtn();
+    ["cell-band", "cell-bw"].forEach(id => {
+      const el = document.getElementById(id);
+      if (el && el.textContent && el.textContent.trim() !== "---") {
+        el.textContent = fmtBand(el.textContent);
+      }
+    });
+    drawLiveChartOnce();
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initOnce);
+  } else {
+    initOnce();
+  }
+
+  setInterval(() => {
+    const liveView = document.getElementById("view-live");
+    if (liveView && !liveView.classList.contains("hidden")) {
+      drawLiveChartOnce();
+    }
+    const mapView = document.getElementById("view-map");
+    if (mapView && !mapView.classList.contains("hidden") && typeof window.rtRenderIsraelMap === "function") {
+      window.rtRenderIsraelMap();
+    }
+  }, 1000);
+})();</script>
+
+
+<script id="rt-rf-live-logger-v41">
+(function() {
+  if (window.__rtRfLiveLoggerV41) return;
+  window.__rtRfLiveLoggerV41 = true;
+
+  var prevFn = window.onRealModemData;
+  var lastRfPush = 0;
+
+  window.onRealModemData = function(data) {
+    var ret;
+    if (typeof prevFn === "function") {
+      ret = prevFn.apply(this, arguments);
+    }
+    try {
+      var now = Date.now();
+      if (now - lastRfPush >= 1200 && typeof window.addLog === "function" && window.state) {
+        lastRfPush = now;
+        var sc = window.state.servingCell || {};
+        var rf = window.state.rf || {};
+        var rsrpStr = (typeof rf.rsrp === "number" && !Number.isNaN(rf.rsrp)) ? rf.rsrp.toFixed(1) + " dBm" : "--";
+        var rsrqStr = (typeof rf.rsrq === "number" && !Number.isNaN(rf.rsrq)) ? rf.rsrq.toFixed(1) + " dB" : "--";
+        var sinrStr = (typeof rf.sinr === "number" && !Number.isNaN(rf.sinr)) ? rf.sinr.toFixed(1) + " dB" : "--";
+        var techStr = sc.tech || window.state.activeRat || "CELL";
+        var pciStr = (sc.pci !== undefined && sc.pci !== null && sc.pci !== "---") ? sc.pci : "--";
+        var bandStr = (sc.band && sc.band !== "---") ? sc.band : "--";
+        window.addLog(
+          "RF",
+          "LIVE",
+          techStr + " PCI:" + pciStr + " | " + bandStr,
+          "RSRP: " + rsrpStr + " | RSRQ: " + rsrqStr + " | SINR: " + sinrStr
+        );
+      }
+    } catch (_err) {}
+    return ret;
+  };
+  window.onRealModemData._rtRfLogHook = true;
+})();
+</script>
+
+
+<script id="rt-rf-report-ensure-v1">
+/* RT_RF_REPORT_ENSURE_V1 */
+(function() {
+  if (window.__rtRfReportEnsureV1) return;
+  window.__rtRfReportEnsureV1 = true;
+  var lastLogTime = 0;
+  function emitRfLog(raw) {
+    try {
+      if (typeof window.addLog !== "function") return;
+      var now = Date.now();
+      if (now - lastLogTime < 1000) return;
+      lastLogTime = now;
+      var st = window.state || {};
+      var sc = st.servingCell || {};
+      var rf = st.rf || {};
+      var d = (raw && typeof raw === "object") ? raw : {};
+      var rsrp = (typeof rf.rsrp === "number") ? rf.rsrp : (typeof d.rsrp === "number" ? d.rsrp : null);
+      var rsrq = (typeof rf.rsrq === "number") ? rf.rsrq : (typeof d.rsrq === "number" ? d.rsrq : null);
+      var sinr = (typeof rf.sinr === "number") ? rf.sinr : (typeof d.sinr === "number" ? d.sinr : null);
+      var tech = sc.tech || d.tech || st.activeRat || "CELL";
+      var pci = (sc.pci !== undefined && sc.pci !== null && sc.pci !== "---") ? sc.pci : (d.pci ?? "--");
+      var band = (sc.band && sc.band !== "---") ? sc.band : (d.band || "--");
+      var rsrpTxt = (typeof rsrp === "number") ? rsrp.toFixed(1) + " dBm" : "--";
+      var rsrqTxt = (typeof rsrq === "number") ? rsrq.toFixed(1) + " dB" : "--";
+      var sinrTxt = (typeof sinr === "number") ? sinr.toFixed(1) + " dB" : "--";
+      window.addLog("RF", "MODEM", tech + " PCI:" + pci + " | " + band, "RSRP: " + rsrpTxt + " | RSRQ: " + rsrqTxt + " | SINR: " + sinrTxt);
+    } catch (_e) {}
+  }
+  var origModem = window.onRealModemData;
+  window.onRealModemData = function(payload) {
+    var res = (typeof origModem === "function") ? origModem.apply(this, arguments) : undefined;
+    emitRfLog(payload);
+    return res;
+  };
+  window.onRealModemData._rtRfLogHook = true;
+})();
+</script>
+
+</body>
+</html>
