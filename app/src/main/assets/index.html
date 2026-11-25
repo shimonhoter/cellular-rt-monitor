@@ -1741,5 +1741,70 @@ if (window.__rtStableV41) return;
 })();
 </script>
 
+
+<script id="rt-rf-stream-force-render-v2">
+/* RT_RF_STREAM_FORCE_RENDER_V2 */
+(function() {
+  if (window.__rtRfStreamForceRenderV2) return;
+  window.__rtRfStreamForceRenderV2 = true;
+
+  var lastPushTs = 0;
+
+  function pushRfSample(payload) {
+    try {
+      if (typeof window.addLog !== "function") return;
+      var now = Date.now();
+      if (now - lastPushTs < 900) return;
+      lastPushTs = now;
+
+      var st = window.state || {};
+      var sc = st.servingCell || {};
+      var rf = st.rf || {};
+      var d = (payload && typeof payload === "object") ? payload : {};
+
+      var rsrp = (typeof rf.rsrp === "number") ? rf.rsrp : (typeof d.rsrp === "number" ? d.rsrp : null);
+      var rsrq = (typeof rf.rsrq === "number") ? rf.rsrq : (typeof d.rsrq === "number" ? d.rsrq : null);
+      var sinr = (typeof rf.sinr === "number") ? rf.sinr : (typeof d.sinr === "number" ? d.sinr : null);
+
+      var tech = sc.tech || d.tech || st.activeRat || "CELL";
+      var pci = (sc.pci !== undefined && sc.pci !== null && sc.pci !== "---") ? sc.pci : (d.pci !== undefined ? d.pci : "--");
+      var band = (sc.band && sc.band !== "---") ? sc.band : (d.band || "--");
+
+      var rsrpStr = (typeof rsrp === "number") ? rsrp.toFixed(1) + " dBm" : "--";
+      var rsrqStr = (typeof rsrq === "number") ? rsrq.toFixed(1) + " dB" : "--";
+      var sinrStr = (typeof sinr === "number") ? sinr.toFixed(1) + " dB" : "--";
+
+      window.addLog(
+        "RF",
+        "MODEM",
+        tech + " PCI:" + pci + " | " + band,
+        "RSRP: " + rsrpStr + " | RSRQ: " + rsrqStr + " | SINR: " + sinrStr
+      );
+
+      if (typeof window.renderLogs === "function") {
+        window.renderLogs();
+      }
+    } catch (_e) {}
+  }
+
+  function wrapModemFn() {
+    var cur = window.onRealModemData;
+    if (typeof cur === "function" && !cur._rtRfForceV2) {
+      var wrapped = function() {
+        var ret = cur.apply(this, arguments);
+        pushRfSample(arguments[0]);
+        return ret;
+      };
+      wrapped._rtRfForceV2 = true;
+      wrapped._rtRfLogHook = true;
+      window.onRealModemData = wrapped;
+    }
+  }
+
+  wrapModemFn();
+  setInterval(wrapModemFn, 1500);
+})();
+</script>
+
 </body>
 </html>
