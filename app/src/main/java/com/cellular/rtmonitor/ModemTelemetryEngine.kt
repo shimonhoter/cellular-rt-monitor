@@ -159,10 +159,20 @@ class ModemTelemetryEngine(
             payload.put("timestamp", System.currentTimeMillis())
 
             val neighborsArray = JSONArray()
+            // RT-FALLBACK-STRONGEST-CELL
             var servingFound = false
+            val targetServingInfo: CellInfo? = cellInfoList.firstOrNull { it.isRegistered }
+                ?: cellInfoList.maxByOrNull { c ->
+                    when (c) {
+                        is CellInfoLte -> c.cellSignalStrength.rsrp.let { if (it != CellInfo.UNAVAILABLE) it else -999 }
+                        is CellInfoWcdma -> c.cellSignalStrength.dbm.let { if (it != CellInfo.UNAVAILABLE) it else -999 }
+                        is CellInfoGsm -> c.cellSignalStrength.dbm.let { if (it != CellInfo.UNAVAILABLE) it else -999 }
+                        else -> -999
+                    }
+                }
 
             for (info in cellInfoList) {
-                if (info.isRegistered && !servingFound) {
+                if (!servingFound && info === targetServingInfo) {
                     servingFound = true
                     val servingJson = parseServingCell(info, formattedPlmn)
                     val currentPci = servingJson.optInt("pci", -1)
