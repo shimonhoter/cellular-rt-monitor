@@ -1217,1724 +1217,13 @@ ${sampledRows.join('\n')}`;
 
 
 
-<style id="rt-clean-chart-style">
-.rt-axes-shell {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-}
-.rt-axes-main {
-  position: relative;
-  flex: 1;
-  min-height: 0;
-  display: flex;
-}
-.rt-y-axis {
-  width: 34px;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  padding: 4px 3px 4px 2px;
-  font-family: monospace;
-  font-size: 9px;
-  color: #94a3b8;
-  background: rgba(2, 6, 23, 0.55);
-  border-right: 1px solid rgba(148, 163, 184, 0.2);
-  user-select: none;
-  pointer-events: none;
-  direction: ltr;
-}
-.rt-plot-box {
-  position: relative;
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-}
-.rt-x-axis {
-  height: 15px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0 6px 0 38px;
-  font-family: monospace;
-  font-size: 9px;
-  color: #94a3b8;
-  background: rgba(2, 6, 23, 0.55);
-  border-top: 1px solid rgba(148, 163, 184, 0.2);
-  user-select: none;
-  pointer-events: none;
-  direction: ltr;
-}
-.rt-live-pill {
-  position: absolute;
-  top: 5px;
-  left: 6px;
-  z-index: 15;
-  display: inline-flex;
-  gap: 6px;
-  align-items: center;
-  background: rgba(2, 6, 23, 0.88);
-  border: 1px solid rgba(56, 189, 248, 0.45);
-  border-radius: 5px;
-  padding: 2px 7px;
-  font-family: monospace;
-  font-size: 10px;
-  font-weight: 700;
-  pointer-events: none;
-  direction: ltr;
-}
-</style>
-<script id="rt-clean-chart-script">
+
+<script id="rt-stable-v41">
 (function() {
-  if (window.__rtCleanChartMounted) return;
-  window.__rtCleanChartMounted = true;
+  if (window.__rtStableV41) return;
+  window.__rtStableV41 = true;
 
-  function mountAxes() {
-    const canvas = document.getElementById("rfChart");
-    if (!canvas || canvas.dataset.rtCleanMounted === "1") return;
-    const parent = canvas.parentElement;
-    if (!parent) return;
-
-    canvas.dataset.rtCleanMounted = "1";
-    const shell = document.createElement("div");
-    shell.className = "rt-axes-shell";
-
-    const mainRow = document.createElement("div");
-    mainRow.className = "rt-axes-main";
-
-    const yAxis = document.createElement("div");
-    yAxis.className = "rt-y-axis";
-    yAxis.innerHTML = "<span>-50</span><span>-75</span><span>-100</span><span>-125</span>";
-
-    const plotBox = document.createElement("div");
-    plotBox.className = "rt-plot-box";
-
-    const livePill = document.createElement("div");
-    livePill.className = "rt-live-pill";
-    livePill.innerHTML =
-      '<span style="color:#34d399" id="rt-pill-rsrp">RSRP: --</span>' +
-      '<span style="color:#38bdf8" id="rt-pill-rsrq">RSRQ: --</span>' +
-      '<span style="color:#fbbf24" id="rt-pill-rssi">RSSI: --</span>' +
-      '<span style="color:#818cf8" id="rt-pill-sinr">SINR: --</span>';
-
-    const xAxis = document.createElement("div");
-    xAxis.className = "rt-x-axis";
-    xAxis.innerHTML = "<span>-60s</span><span>-40s</span><span>-20s</span><span>now</span>";
-
-    parent.insertBefore(shell, canvas);
-    plotBox.appendChild(canvas);
-    plotBox.appendChild(livePill);
-    mainRow.appendChild(yAxis);
-    mainRow.appendChild(plotBox);
-    shell.appendChild(mainRow);
-    shell.appendChild(xAxis);
-  }
-
-  function syncPill() {
-    mountAxes();
-    try {
-      const rf = (typeof state !== "undefined" && state && state.rf) ? state.rf : null;
-      const fmt = v => (typeof v === "number" && !Number.isNaN(v)) ? v.toFixed(1) : "--";
-      const rsrpEl = document.getElementById("rt-pill-rsrp");
-      const rsrqEl = document.getElementById("rt-pill-rsrq");
-      const rssiEl = document.getElementById("rt-pill-rssi");
-      const sinrEl = document.getElementById("rt-pill-sinr");
-      if (rsrpEl && rf) rsrpEl.textContent = "RSRP: " + fmt(rf.rsrp);
-      if (rsrqEl && rf) rsrqEl.textContent = "RSRQ: " + fmt(rf.rsrq);
-      if (rssiEl && rf) rssiEl.textContent = "RSSI: " + fmt(rf.rssi);
-      if (sinrEl && rf) sinrEl.textContent = "SINR: " + fmt(rf.sinr);
-    } catch (e) {}
-  }
-
-  document.addEventListener("DOMContentLoaded", syncPill);
-  setInterval(syncPill, 500);
-})();
-</script>
-
-
-
-
-
-
-
-
-<script id="rt-persistent-store">
-// [RT_PERSISTENT_STORE_V5_NATIVE]
-(function() {
-  const KEY = "rtmonitor_persistent_state_v5";
-  let manualResetInProgress = false;
-
-  function getAppState() {
-    if (typeof window.state !== "undefined" && window.state) return window.state;
-    if (typeof state !== "undefined" && state) {
-      window.state = state;
-      return state;
-    }
-    return null;
-  }
-
-  function safeClone(val, fallback) {
-    try { return JSON.parse(JSON.stringify(val)); } catch (e) { return fallback; }
-  }
-
-  function snapshotState() {
-    const st = getAppState();
-    if (!st || manualResetInProgress) return null;
-    const snap = {};
-    for (const k of Object.keys(st)) {
-      const v = st[k];
-      if (typeof v === "number" || typeof v === "string" || typeof v === "boolean" || v === null) {
-        snap[k] = v;
-      } else if (Array.isArray(v)) {
-        snap[k] = safeClone(v.slice(-2000), []);
-      } else if (typeof v === "object") {
-        snap[k] = safeClone(v, {});
-      }
-    }
-    return snap;
-  }
-
-  function hasData(snap) {
-    if (!snap) return false;
-    return (
-      (typeof snap.sampleCount === "number" && snap.sampleCount > 0) ||
-      (typeof snap.hoCount === "number" && snap.hoCount > 0) ||
-      (Array.isArray(snap.logs) && snap.logs.length > 0) ||
-      (Array.isArray(snap.history) && snap.history.length > 0) ||
-      (Array.isArray(snap.liveSamples) && snap.liveSamples.length > 0)
-    );
-  }
-
-  function writeNative(payloadStr) {
-    try {
-      if (window.AndroidModem && typeof window.AndroidModem.saveStateToDevice === "function") {
-        window.AndroidModem.saveStateToDevice(payloadStr);
-      }
-    } catch (e) {}
-  }
-
-  function readNative() {
-    try {
-      if (window.AndroidModem && typeof window.AndroidModem.loadStateFromDevice === "function") {
-        const s = window.AndroidModem.loadStateFromDevice();
-        if (s && s.length > 2) return s;
-      }
-    } catch (e) {}
-    return null;
-  }
-
-  function clearNative() {
-    try {
-      if (window.AndroidModem && typeof window.AndroidModem.clearStateOnDevice === "function") {
-        window.AndroidModem.clearStateOnDevice();
-      }
-    } catch (e) {}
-  }
-
-  function saveNow() {
-    if (manualResetInProgress) return;
-    try {
-      const snap = snapshotState();
-      if (!hasData(snap)) return;
-      const payload = JSON.stringify({ ts: Date.now(), state: snap });
-      writeNative(payload);
-      try { localStorage.setItem(KEY, payload); } catch (e) {}
-    } catch (e) {}
-  }
-
-  function refreshAllViews() {
-    const fnNames = ["updateLiveUI", "renderLogs", "renderHistory", "renderLiveChart", "renderChart", "drawChart", "updateStats", "renderAll"];
-    for (const name of fnNames) {
-      try {
-        if (typeof window[name] === "function") window[name]();
-      } catch (e) {}
-    }
-    try { if (typeof updateLiveUI === "function") updateLiveUI(); } catch (e) {}
-    try { if (typeof renderLogs === "function") renderLogs(); } catch (e) {}
-    try { if (typeof renderLiveChart === "function") renderLiveChart(); } catch (e) {}
-  }
-
-  function restoreNow() {
-    if (manualResetInProgress) return;
-    try {
-      const st = getAppState();
-      const raw = readNative() || localStorage.getItem(KEY) || localStorage.getItem("rtmonitor_persistent_state_v4") || localStorage.getItem("rtmonitor_persistent_state_v3") || localStorage.getItem("rtmonitor_persistent_state_v2") || localStorage.getItem("rtmonitor_persistent_state_v1");
-      if (!raw || !st) return;
-      const parsed = JSON.parse(raw);
-      const saved = parsed && parsed.state ? parsed.state : null;
-      if (!saved || typeof saved !== "object") return;
-
-      for (const k of Object.keys(saved)) {
-        const sv = saved[k];
-        if (Array.isArray(sv)) {
-          if (!Array.isArray(st[k])) st[k] = [];
-          st[k].length = 0;
-          for (let i = 0; i < sv.length; i++) st[k].push(sv[i]);
-        } else if (sv !== null && typeof sv === "object" && st[k] && typeof st[k] === "object") {
-          Object.assign(st[k], sv);
-        } else {
-          st[k] = sv;
-        }
-      }
-      refreshAllViews();
-    } catch (e) {}
-  }
-
-  window.rtManualResetAllData = function() {
-    manualResetInProgress = true;
-    clearNative();
-    try {
-      localStorage.removeItem(KEY);
-      localStorage.removeItem("rtmonitor_persistent_state_v4");
-      localStorage.removeItem("rtmonitor_persistent_state_v3");
-      localStorage.removeItem("rtmonitor_persistent_state_v2");
-      localStorage.removeItem("rtmonitor_persistent_state_v1");
-    } catch (e) {}
-    try {
-      const st = getAppState();
-      if (st) {
-        if (typeof st.sampleCount === "number") st.sampleCount = 0;
-        if (typeof st.hoCount === "number") st.hoCount = 0;
-        for (const k of Object.keys(st)) {
-          if (Array.isArray(st[k])) st[k].length = 0;
-        }
-      }
-      refreshAllViews();
-    } catch (e) {}
-    setTimeout(function() { manualResetInProgress = false; }, 400);
-  };
-
-  function hookResetButtons() {
-    document.querySelectorAll("button").forEach(function(btn) {
-      if (btn.dataset.rtResetHooked === "1") return;
-      const t = (btn.textContent || "").trim();
-      const oc = btn.getAttribute("onclick") || "";
-      if (t.includes("נקה") || t.includes("איפוס") || /clear|reset/i.test(oc)) {
-        btn.dataset.rtResetHooked = "1";
-        btn.addEventListener("click", function() {
-          manualResetInProgress = true;
-          clearNative();
-          try {
-            localStorage.removeItem(KEY);
-            localStorage.removeItem("rtmonitor_persistent_state_v4");
-            localStorage.removeItem("rtmonitor_persistent_state_v3");
-            localStorage.removeItem("rtmonitor_persistent_state_v2");
-            localStorage.removeItem("rtmonitor_persistent_state_v1");
-          } catch (e) {}
-          setTimeout(function() { manualResetInProgress = false; }, 400);
-        });
-      }
-    });
-  }
-
-  function hookRealModemData() {
-    if (typeof window.onRealModemData === "function" && !window.onRealModemData._rtPersistedHook) {
-      const orig = window.onRealModemData;
-      const wrapped = function(data) {
-        const res = orig.apply(this, arguments);
-        saveNow();
-        return res;
-      };
-      wrapped._rtPersistedHook = true;
-      window.onRealModemData = wrapped;
-    }
-  }
-
-  function runRestoreSequence() {
-    hookRealModemData();
-    restoreNow();
-    hookResetButtons();
-    [100, 350, 800, 1600, 3000].forEach(function(ms) {
-      setTimeout(function() {
-        hookRealModemData();
-        restoreNow();
-        hookResetButtons();
-      }, ms);
-    });
-  }
-
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", runRestoreSequence);
-  } else {
-    runRestoreSequence();
-  }
-  window.addEventListener("load", runRestoreSequence);
-  setInterval(function() {
-    hookRealModemData();
-    if (!document.hidden) {
-      saveNow();
-    }
-  }, 3500);
-  document.addEventListener("visibilitychange", function() {
-    if (document.hidden) saveNow();
-    else restoreNow();
-  });
-  window.addEventListener("pagehide", saveNow);
-  window.addEventListener("beforeunload", saveNow);
-})();
-</script>
-
-<script id="rt-core-band-imsi-exit">
-// [RT_CORE_BAND_IMSI_EXIT_V2]
-(function() {
-  const BAND_FREQ = {
-    "B1": "2100 MHz (1920-2170 MHz)",
-    "B2": "1900 MHz (1850-1990 MHz)",
-    "B3": "1800 MHz (1710-1880 MHz)",
-    "B4": "AWS-1 (1700/2100 MHz)",
-    "B5": "850 MHz (824-894 MHz)",
-    "B7": "2600 MHz (2500-2690 MHz)",
-    "B8": "900 MHz (880-960 MHz)",
-    "B12": "700 MHz (699-716 MHz)",
-    "B13": "700 MHz (746-787 MHz)",
-    "B20": "800 MHz DD (791-862 MHz)",
-    "B28": "700 MHz APT (703-803 MHz)",
-    "B38": "2600 MHz TDD (2570-2620 MHz)",
-    "B40": "2300 MHz TDD (2300-2400 MHz)",
-    "B41": "2500 MHz TDD (2496-2690 MHz)",
-    "B66": "AWS-3 (1710-2200 MHz)",
-    "n1": "2100 MHz NR (1920-2170 MHz)",
-    "n3": "1800 MHz NR (1710-1880 MHz)",
-    "n7": "2600 MHz NR (2500-2690 MHz)",
-    "n28": "700 MHz NR (703-803 MHz)",
-    "n41": "2500 MHz NR (2496-2690 MHz)",
-    "n77": "3700 MHz C-Band (3300-4200 MHz)",
-    "n78": "3500 MHz C-Band (3300-3800 MHz)"
-  };
-
-  window.formatBandWithRange = function(rawBand) {
-    if (!rawBand || rawBand === "---") return "---";
-    const str = String(rawBand).trim();
-    if (str.includes("(") && str.includes(")")) return str;
-    return str.split("+").map(part => {
-      const p = part.trim();
-      const key = p.replace(/^LTE\s*/i, "").trim();
-      const freq = BAND_FREQ[key] || BAND_FREQ[p];
-      return freq ? `${p} (${freq})` : p;
-    }).join(" + ");
-  };
-
-  function mountInlineImsiAndExitBtn() {
-    if (!document.getElementById("rt-inline-imsi-row")) {
-      const bandSpan = document.getElementById("cell-band");
-      const container = bandSpan ? bandSpan.closest("div.grid, div.space-y-2, div.flex-col") || bandSpan.parentElement : null;
-      const row = document.createElement("div");
-      row.id = "rt-inline-imsi-row";
-      row.style.cssText = "margin-top:6px;padding:6px 10px;border-radius:6px;background:rgba(15,23,42,0.85);border:1px solid #334155;font-size:12px;color:#e2e8f0;display:flex;justify-content:space-between;align-items:center;";
-      row.innerHTML = '<span><strong>IMSI:</strong> <span id="rt-inline-imsi" style="color:#38bdf8;">' + ((window.state && window.state.imsi) || "---") + '</span></span>';
-      if (container && container.parentNode) {
-        container.parentNode.insertBefore(row, container.nextSibling);
-      } else {
-        document.body.prepend(row);
-      }
-    }
-
-    if (!document.getElementById("rt-explicit-exit-btn")) {
-      const exitBtn = document.createElement("button");
-      exitBtn.id = "rt-explicit-exit-btn";
-      exitBtn.type = "button";
-      exitBtn.textContent = "יציאה";
-      exitBtn.style.cssText = "padding:6px 14px;border-radius:8px;background:#b91c1c;color:#ffffff;font-weight:700;font-size:12px;border:1px solid #f87171;flex-shrink:0;cursor:pointer;";
-
-      const imsiRow = document.getElementById("rt-inline-imsi-row");
-      const topBarCandidate =
-        document.querySelector("header .flex, header, nav .flex, nav") ||
-        (imsiRow ? imsiRow.parentElement : null);
-
-      if (imsiRow && imsiRow.parentNode) {
-        const actionStrip = document.createElement("div");
-        actionStrip.id = "rt-exit-action-strip";
-        actionStrip.style.cssText = "display:flex;justify-content:flex-end;align-items:center;margin:6px 0 8px 0;";
-        actionStrip.appendChild(exitBtn);
-        if (imsiRow.nextSibling) {
-          imsiRow.parentNode.insertBefore(actionStrip, imsiRow.nextSibling);
-        } else {
-          imsiRow.parentNode.appendChild(actionStrip);
-        }
-      } else if (topBarCandidate) {
-        topBarCandidate.appendChild(exitBtn);
-      } else {
-        document.body.prepend(exitBtn);
-      }
-
-      window.rtPersistFullStateNow = function() {
-        try {
-          const st = window.state || {};
-          const snapshot = {
-            sampleCount: st.sampleCount ?? 0,
-            hoCount: st.hoCount ?? 0,
-            imsi: st.imsi ?? "",
-            servingCell: st.servingCell ?? null,
-            rf: st.rf ?? null,
-            neighbors: st.neighbors ?? [],
-            history: st.history ?? [],
-            liveSamples: st.liveSamples ?? [],
-            logs: st.logs ?? [],
-            savedAt: Date.now()
-          };
-          const serialized = JSON.stringify(snapshot);
-          try { localStorage.setItem("rt_persistent_state_backup", serialized); } catch (_e) {}
-          if (window.AndroidModem && typeof window.AndroidModem.saveStateToDevice === "function") {
-            window.AndroidModem.saveStateToDevice(serialized);
-          }
-        } catch (_e) {}
-      };
-
-      window.rtRestoreStateOnBoot = function() {
-        try {
-          let raw = "";
-          if (window.AndroidModem && typeof window.AndroidModem.loadStateFromDevice === "function") {
-            raw = window.AndroidModem.loadStateFromDevice() || "";
-          }
-          if (!raw || raw.trim() === "") {
-            try { raw = localStorage.getItem("rt_persistent_state_backup") || ""; } catch (_e) {}
-          }
-          if (raw && raw.trim() !== "") {
-            const parsed = JSON.parse(raw);
-            if (parsed && typeof parsed === "object") {
-              window.state = window.state || {};
-              if (typeof parsed.sampleCount === "number") window.state.sampleCount = parsed.sampleCount;
-              if (typeof parsed.hoCount === "number") window.state.hoCount = parsed.hoCount;
-              if (parsed.imsi !== undefined) window.state.imsi = parsed.imsi;
-              if (parsed.servingCell !== undefined) window.state.servingCell = parsed.servingCell;
-              if (parsed.rf !== undefined) window.state.rf = parsed.rf;
-              if (Array.isArray(parsed.neighbors)) window.state.neighbors = parsed.neighbors;
-              if (Array.isArray(parsed.history)) window.state.history = parsed.history;
-              if (Array.isArray(parsed.liveSamples)) window.state.liveSamples = parsed.liveSamples;
-              if (Array.isArray(parsed.logs)) window.state.logs = parsed.logs;
-              const imsiEl = document.getElementById("rt-inline-imsi");
-              if (imsiEl && window.state.imsi) imsiEl.textContent = window.state.imsi;
-            }
-          }
-        } catch (_e) {}
-      };
-
-      window.rtRestoreStateOnBoot();
-      setInterval(function() {
-        try { if (typeof window.rtPersistFullStateNow === "function") window.rtPersistFullStateNow(); } catch (_e) {}
-      }, 3000);
-
-      exitBtn.addEventListener("click", function() {
-        try { if (typeof addLog === "function") addLog("SYS", "EXIT", "שמירת נתונים ויציאה מבוקרת מהאפליקציה"); } catch (_e) {}
-        try { if (typeof window.rtPersistFullStateNow === "function") window.rtPersistFullStateNow(); } catch (_e) {}
-        try {
-          if (window.AndroidModem && typeof window.AndroidModem.exitApp === "function") {
-            window.AndroidModem.exitApp();
-            return;
-          }
-        } catch (_e) {}
-        try { window.close(); } catch (_e) {}
-      });
-    }
-  }
-
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", mountInlineImsiAndExitBtn);
-  } else {
-    mountInlineImsiAndExitBtn();
-  }
-})();
-</script>
-<script id="rt-vertical-rf-top-exit">
-// [RT_VERTICAL_RF_TOP_EXIT_V1]
-(function() {
-  function ensureTopLeftExitAndCompactRow() {
-    try {
-      let exitBtn = document.getElementById("rt-top-left-exit-btn");
-      if (!exitBtn) {
-        exitBtn = document.createElement("button");
-        exitBtn.id = "rt-top-left-exit-btn";
-        exitBtn.type = "button";
-        exitBtn.textContent = "יציאה";
-        exitBtn.style.cssText = "position:fixed;top:8px;left:8px;z-index:9999;padding:5px 10px;border-radius:6px;background:#b91c1c;color:#ffffff;font-weight:700;font-size:11px;border:1px solid #f87171;line-height:1.1;";
-        exitBtn.addEventListener("click", function() {
-          try {
-            if (typeof window.rtSaveBeforeExit === "function") window.rtSaveBeforeExit();
-          } catch (_s) {}
-          try {
-            if (window.AndroidModem && typeof window.AndroidModem.exitApp === "function") {
-              window.AndroidModem.exitApp();
-              return;
-            }
-          } catch (_a) {}
-          try { window.close(); } catch (_c) {}
-        });
-        document.body.appendChild(exitBtn);
-      }
-
-      const topBar = document.querySelector("header") || document.body.firstElementChild;
-      if (topBar) {
-        topBar.style.paddingLeft = "64px";
-        topBar.style.gap = "4px";
-        const extraBtns = Array.from(topBar.querySelectorAll("button, a"));
-        extraBtns.forEach(el => {
-          if (el.id !== "rt-top-left-exit-btn" && /help|עזרה|\?/i.test((el.textContent || "").trim())) {
-            el.style.display = "none";
-          }
-        });
-      }
-    } catch (_e) {}
-  }
-
-  function stackRfMetricsVertically() {
-    try {
-      const targets = [
-        { ids: ["kpi-rssi", "rssi-value"], label: "RSSI", unit: "dBm" },
-        { ids: ["kpi-rsrp", "rsrp-value"], label: "RSRP", unit: "dBm" },
-        { ids: ["kpi-rsrq", "rsrq-value"], label: "RSRQ", unit: "dB" },
-        { ids: ["kpi-sinr", "sinr-value"], label: "SINR", unit: "dB" }
-      ];
-
-      const matchedCards = [];
-      targets.forEach(cfg => {
-        let valEl = null;
-        for (const id of cfg.ids) {
-          const found = document.getElementById(id);
-          if (found) { valEl = found; break; }
-        }
-        if (valEl) {
-          const row = valEl.parentElement;
-          if (row) {
-            row.style.display = "flex";
-            row.style.flexDirection = "row";
-            row.style.alignItems = "baseline";
-            row.style.justifyContent = "flex-end";
-            row.style.gap = "6px";
-            row.style.whiteSpace = "nowrap";
-            valEl.style.display = "inline";
-
-            let unitSpan = row.querySelector("[data-rt-unit-inline='1']");
-            if (!unitSpan) {
-              Array.from(row.childNodes).forEach(node => {
-                if (node !== valEl && node.textContent && /^(dbm|db)$/i.test(node.textContent.trim())) {
-                  node.remove();
-                }
-              });
-              unitSpan = document.createElement("span");
-              unitSpan.setAttribute("data-rt-unit-inline", "1");
-              unitSpan.textContent = cfg.unit;
-              unitSpan.style.cssText = "font-size:11px;color:#94a3b8;font-weight:600;display:inline;";
-              row.appendChild(unitSpan);
-            }
-          }
-          const card = valEl.closest("[class*='rounded'], [class*='card'], [class*='grid'] > div") || (row && row.parentElement);
-          if (card && !matchedCards.includes(card)) {
-            matchedCards.push(card);
-          }
-        }
-      });
-
-      if (matchedCards.length >= 2) {
-        const container = matchedCards[0].parentElement;
-        if (container) {
-          container.style.display = "flex";
-          container.style.flexDirection = "column";
-          container.style.gap = "6px";
-          container.style.gridTemplateColumns = "none";
-          matchedCards.forEach(c => {
-            c.style.width = "100%";
-          });
-        }
-      }
-    } catch (_e) {}
-  }
-
-  function applyAllLayoutRules() {
-    ensureTopLeftExitAndCompactRow();
-    stackRfMetricsVertically();
-  }
-
-  const orig = window.onRealModemData;
-  if (typeof orig === "function" && !orig._rtVerticalRfWrapped) {
-    const wrapped = function(data) {
-      const res = orig.apply(this, arguments);
-      applyAllLayoutRules();
-      return res;
-    };
-    wrapped._rtVerticalRfWrapped = true;
-    window.onRealModemData = wrapped;
-  }
-
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", applyAllLayoutRules);
-  } else {
-    applyAllLayoutRules();
-  }
-})();
-
-  (function() {
-    if (window.__rtClearAndPersistenceGuardInstalled) return;
-    window.__rtClearAndPersistenceGuardInstalled = true;
-
-    window.rtConfirmClearAction = function(labelText) {
-      const msg = "האם אתה בטוח שברצונך לבצע " + (labelText || "ניקוי נתונים") + "? הנתונים שנמחקים לא ישוחזרו.";
-      try {
-        return window.confirm(msg) === true;
-      } catch (_e) {
-        return false;
-      }
-    };
-
-    window.rtExecuteProtectedClear = function(labelText, clearFn) {
-      if (!window.rtConfirmClearAction(labelText)) {
-        try { if (typeof addLog === "function") addLog("SYS", "CLEAR", "בוטל ניקוי: " + (labelText || "נתונים")); } catch (_e) {}
-        return false;
-      }
-      try {
-        if (typeof clearFn === "function") clearFn();
-      } catch (_e) {}
-      try {
-        if (typeof window.rtPersistFullStateNow === "function") window.rtPersistFullStateNow();
-      } catch (_e) {}
-      try { if (typeof addLog === "function") addLog("SYS", "CLEAR", "בוצע ניקוי מאושר: " + (labelText || "נתונים")); } catch (_e) {}
-      return true;
-    };
-
-    function bindClearButtons() {
-      const allButtons = Array.from(document.querySelectorAll("button, [role='button'], .btn, .action-btn"));
-      allButtons.forEach(function(btn) {
-        if (btn.dataset.rtClearGuarded === "1") return;
-        const txt = ((btn.innerText || btn.textContent || "") + " " + (btn.id || "") + " " + (btn.getAttribute("onclick") || "")).toLowerCase();
-        const isClearBtn = txt.includes("נקה") || txt.includes("clear") || txt.includes("reset");
-        if (!isClearBtn) return;
-        btn.dataset.rtClearGuarded = "1";
-
-        const origOnclick = btn.getAttribute("onclick");
-        if (origOnclick) {
-          btn.removeAttribute("onclick");
-        }
-
-        btn.addEventListener("click", function(ev) {
-          if (btn.dataset.rtBypassGuard === "1") {
-            btn.dataset.rtBypassGuard = "0";
-            return;
-          }
-          ev.preventDefault();
-          ev.stopImmediatePropagation();
-          const label = (btn.innerText || btn.textContent || btn.id || "ניקוי נתונים").trim();
-          const ok = window.rtConfirmClearAction(label);
-          if (!ok) {
-            try { if (typeof addLog === "function") addLog("SYS", "CLEAR", "בוטל ניקוי: " + label); } catch (_e) {}
-            return;
-          }
-          if (origOnclick) {
-            try {
-              const fn = new Function(origOnclick);
-              fn.call(btn);
-            } catch (_e) {}
-          } else {
-            btn.dataset.rtBypassGuard = "1";
-            btn.click();
-          }
-          try { if (typeof window.rtPersistFullStateNow === "function") window.rtPersistFullStateNow(); } catch (_e) {}
-        }, true);
-      });
-    }
-
-    if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", bindClearButtons);
-    } else {
-      bindClearButtons();
-    }
-    setInterval(bindClearButtons, 2000);
-  })();
-
-
-  (function() {
-    if (window.__rtFullUiUxV41Installed) return;
-    window.__rtFullUiUxV41Installed = true;
-
-    const styleEl = document.createElement("style");
-    styleEl.id = "rt-full-ui-ux-v41-style";
-    styleEl.textContent = `
-      #rt-floating-exit-btn, .rt-floating-exit, [data-floating-exit="true"] {
-        display: none !important;
-      }
-      .rt-top-action-bar {
-        display: flex !important;
-        align-items: center !important;
-        justify-content: space-between !important;
-        gap: 8px !important;
-        flex-wrap: wrap !important;
-        width: 100% !important;
-        box-sizing: border-box !important;
-      }
-      .rt-top-left-controls {
-        display: flex !important;
-        align-items: center !important;
-        gap: 8px !important;
-      }
-      #rt-explicit-exit-btn {
-        position: static !important;
-        padding: 6px 12px !important;
-        border-radius: 8px !important;
-        background: #b91c1c !important;
-        color: #ffffff !important;
-        font-weight: 700 !important;
-        font-size: 12px !important;
-        border: 1px solid #f87171 !important;
-        cursor: pointer !important;
-        flex-shrink: 0 !important;
-      }
-      #rt-help-menu-btn {
-        position: static !important;
-        padding: 6px 12px !important;
-        border-radius: 8px !important;
-        background: #1e3a8a !important;
-        color: #eff6ff !important;
-        font-weight: 700 !important;
-        font-size: 12px !important;
-        border: 1px solid #60a5fa !important;
-        cursor: pointer !important;
-        flex-shrink: 0 !important;
-      }
-      #rt-help-drawer-modal {
-        position: fixed !important;
-        inset: 0 !important;
-        background: rgba(2, 6, 23, 0.82) !important;
-        z-index: 99990 !important;
-        display: none;
-        align-items: center !important;
-        justify-content: center !important;
-        padding: 16px !important;
-      }
-      #rt-help-drawer-modal.open {
-        display: flex !important;
-      }
-      .rt-help-card {
-        width: 100%;
-        max-width: 420px;
-        background: #0f172a;
-        color: #f8fafc;
-        border: 1px solid #334155;
-        border-radius: 14px;
-        padding: 16px;
-        box-shadow: 0 18px 40px rgba(0,0,0,0.65);
-        text-align: right;
-      }
-      .rt-inline-unit {
-        display: inline !important;
-        white-space: nowrap !important;
-        margin-right: 4px !important;
-        font-size: 0.72em !important;
-        opacity: 0.9 !important;
-      }
-      .rt-metric-inline-row {
-        display: inline-flex !important;
-        align-items: baseline !important;
-        gap: 4px !important;
-        white-space: nowrap !important;
-      }
-      .rt-chart-shell {
-        width: 100% !important;
-        box-sizing: border-box !important;
-        transition: height 0.2s ease !important;
-      }
-      .rt-chart-shell.expanded {
-        min-height: 360px !important;
-      }
-      #rt-map-tab-btn {
-        white-space: nowrap !important;
-      }
-      #rt-map-panel {
-        display: none;
-        background: #0f172a;
-        border: 1px solid #1e293b;
-        border-radius: 12px;
-        padding: 12px;
-        margin: 10px 0;
-        color: #e2e8f0;
-      }
-      #rt-map-panel.active {
-        display: block;
-      }
-      #rt-map-canvas {
-        width: 100%;
-        height: 320px;
-        border-radius: 10px;
-        background: #061021;
-        border: 1px solid #1e3a5f;
-        position: relative;
-        overflow: hidden;
-      }
-      #rt-map-follow-tooltip {
-        position: absolute;
-        top: 10px;
-        right: 10px;
-        max-width: 270px;
-        background: rgba(15, 23, 42, 0.94);
-        border: 1px solid #38bdf8;
-        border-radius: 8px;
-        padding: 8px 10px;
-        font-size: 11px;
-        line-height: 1.45;
-        color: #f1f5f9;
-        z-index: 20;
-        pointer-events: none;
-      }
-    `;
-    document.head.appendChild(styleEl);
-
-    const IL_BAND_RANGES = {
-      "B1": "2100 MHz (1920-1980 / 2110-2170 MHz)",
-      "B3": "1800 MHz (1710-1785 / 1805-1880 MHz)",
-      "B7": "2600 MHz (2500-2570 / 2620-2690 MHz)",
-      "B8": "900 MHz (880-915 / 925-960 MHz)",
-      "B20": "800 MHz (832-862 / 791-821 MHz)",
-      "B28": "700 MHz (703-748 / 758-803 MHz)",
-      "n28": "700 MHz NR (703-748 / 758-803 MHz)",
-      "n78": "3500 MHz NR (3300-3800 MHz)"
-    };
-
-    function cleanBandString(raw) {
-      if (!raw) return "";
-      const m = String(raw).match(/(n?\d{1,3})/i);
-      const code = m ? (m[1].toLowerCase().startsWith("n") && !/^\d/.test(m[1]) ? "n" + m[1].slice(1) : (raw.toLowerCase().includes("nr") ? "n" + m[1] : "B" + m[1])) : String(raw).trim();
-      const range = IL_BAND_RANGES[code] || IL_BAND_RANGES[code.toUpperCase()];
-      return range ? `${code} (${range})` : String(raw).replace(/\)\)+/g, ")").replace(/\(\(+/g, "(").trim();
-    }
-
-    function normalizeBandAndUnits() {
-      const bandNodes = Array.from(document.querySelectorAll("*")).filter(el => {
-        if (el.children.length > 0) return false;
-        const t = (el.textContent || "").trim();
-        return /^B\d{1,2}\s*\(|^n\d{1,3}\s*\(/i.test(t) && t.includes("MHz");
-      });
-      bandNodes.forEach(el => {
-        const cleaned = cleanBandString(el.textContent);
-        if (cleaned && el.textContent !== cleaned) {
-          el.textContent = cleaned;
-        }
-      });
-
-      const unitCandidates = Array.from(document.querySelectorAll("span, div, small, label"));
-      unitCandidates.forEach(el => {
-        if (el.children.length > 0 || el.dataset.rtUnitNormalized === "1") return;
-        const txt = (el.textContent || "").trim();
-        if (txt === "dBm" || txt === "dB") {
-          el.dataset.rtUnitNormalized = "1";
-          el.classList.add("rt-inline-unit");
-          const parent = el.parentElement;
-          if (parent) {
-            parent.style.display = "inline-flex";
-            parent.style.alignItems = "baseline";
-            parent.style.flexWrap = "nowrap";
-            parent.style.gap = "4px";
-          }
-        }
-      });
-    }
-
-    function setupTopBarHelpAndExit() {
-      Array.from(document.querySelectorAll("button, a, div, span")).forEach(el => {
-        const t = (el.textContent || "").trim();
-        if (t === "4636" && el.children.length === 0 && !el.closest("#rt-help-drawer-modal")) {
-          el.style.display = "none";
-        }
-      });
-
-      const exitBtn = document.getElementById("rt-explicit-exit-btn");
-      const headerRoot =
-        (exitBtn && exitBtn.closest("header, nav, .header, .top-bar")) ||
-        document.querySelector("header, nav, .header, .top-bar") ||
-        document.body.firstElementChild;
-
-      let leftGroup = document.getElementById("rt-top-left-controls");
-      if (!leftGroup) {
-        leftGroup = document.createElement("div");
-        leftGroup.id = "rt-top-left-controls";
-        leftGroup.className = "rt-top-left-controls";
-      }
-
-      if (exitBtn && exitBtn.parentElement !== leftGroup) {
-        leftGroup.appendChild(exitBtn);
-      }
-
-      let helpBtn = document.getElementById("rt-help-menu-btn");
-      if (!helpBtn) {
-        helpBtn = document.createElement("button");
-        helpBtn.id = "rt-help-menu-btn";
-        helpBtn.type = "button";
-        helpBtn.textContent = "עזרה ?";
-        leftGroup.appendChild(helpBtn);
-      } else if (helpBtn.parentElement !== leftGroup) {
-        leftGroup.appendChild(helpBtn);
-      }
-
-      if (headerRoot && leftGroup.parentElement !== headerRoot) {
-        headerRoot.classList.add("rt-top-action-bar");
-        headerRoot.insertBefore(leftGroup, headerRoot.firstChild);
-      }
-
-      if (!document.getElementById("rt-help-drawer-modal")) {
-        const modal = document.createElement("div");
-        modal.id = "rt-help-drawer-modal";
-        modal.innerHTML = `
-          <div class="rt-help-card">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-              <strong style="font-size:15px;">עזרה וכלים מתקדמים</strong>
-              <button id="rt-help-close-btn" type="button" style="background:#334155;color:#fff;border:none;border-radius:6px;padding:4px 10px;cursor:pointer;">סגור</button>
-            </div>
-            <p style="font-size:12px;color:#cbd5e1;margin:0 0 12px 0;">
-              אבחון מודם ותפריט שירות (*#*#4636#*#*) מרוכזים כאן במקום בשורת הכותרות הראשית.
-            </p>
-            <div style="display:flex;gap:8px;flex-wrap:wrap;">
-              <button id="rt-help-tech-4636-btn" type="button" style="background:#0284c7;color:#fff;border:none;border-radius:8px;padding:8px 12px;font-weight:700;cursor:pointer;">
-                טכנאי / חיוג 4636
-              </button>
-              <button id="rt-help-shizuku-btn" type="button" style="background:#334155;color:#fff;border:none;border-radius:8px;padding:8px 12px;font-weight:600;cursor:pointer;">
-                הגדרות Shizuku
-              </button>
-            </div>
-          </div>
-        `;
-        document.body.appendChild(modal);
-
-        helpBtn.addEventListener("click", () => modal.classList.add("open"));
-        modal.addEventListener("click", (e) => {
-          if (e.target === modal) modal.classList.remove("open");
-        });
-        document.getElementById("rt-help-close-btn").addEventListener("click", () => modal.classList.remove("open"));
-        document.getElementById("rt-help-tech-4636-btn").addEventListener("click", () => {
-          try { if (typeof addLog === "function") addLog("SYS", "HELP", "הפעלת כלי טכנאי 4636 מתפריט העזרה"); } catch (_e) {}
-          if (window.AndroidModem && typeof window.AndroidModem.dialTechnicianCode === "function") {
-            window.AndroidModem.dialTechnicianCode("*#*#4636#*#*");
-          } else {
-            window.location.href = "tel:*%23*%234636%23*%23*";
-          }
-        });
-        document.getElementById("rt-help-shizuku-btn").addEventListener("click", () => {
-          if (window.AndroidModem && typeof window.AndroidModem.openShizukuApp === "function") {
-            window.AndroidModem.openShizukuApp();
-          }
-        });
-      }
-    }
-
-    function enhanceChartAndAxes() {
-      const canvases = Array.from(document.querySelectorAll("canvas"));
-      const mainCanvas = canvases.find(c => (c.id || "").toLowerCase().includes("signal") || (c.id || "").toLowerCase().includes("chart") || (c.id || "").toLowerCase().includes("live")) || canvases[0];
-      if (!mainCanvas || mainCanvas.dataset.rtChartEnhanced === "1") return;
-      mainCanvas.dataset.rtChartEnhanced = "1";
-
-      const parent = mainCanvas.parentElement;
-      if (!parent) return;
-      parent.classList.add("rt-chart-shell");
-      parent.style.minHeight = "240px";
-
-      const toolbar = document.createElement("div");
-      toolbar.style.cssText = "display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;font-size:11px;color:#94a3b8;";
-      toolbar.innerHTML = `
-        <span>ציר Y: עוצמה/איכות (dBm/dB) | ציר X: דגימות אחרונות</span>
-        <button id="rt-toggle-chart-size-btn" type="button" style="background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;padding:3px 9px;font-size:11px;cursor:pointer;">
-          הגדל גרף
-        </button>
-      `;
-      parent.insertBefore(toolbar, mainCanvas);
-
-      const resizeBtn = document.getElementById("rt-toggle-chart-size-btn");
-      resizeBtn.addEventListener("click", () => {
-        const expanded = parent.classList.toggle("expanded");
-        if (expanded) {
-          parent.style.height = "380px";
-          mainCanvas.style.height = "310px";
-          resizeBtn.textContent = "צמצם גרף";
-        } else {
-          parent.style.height = "";
-          mainCanvas.style.height = "190px";
-          resizeBtn.textContent = "הגדל גרף";
-        }
-        mainCanvas.width = mainCanvas.clientWidth || 320;
-        mainCanvas.height = mainCanvas.clientHeight || 200;
-      });
-    }
-
-    function setupIsraelBaseStationsMapTab() {
-      if (document.getElementById("rt-map-tab-btn")) return;
-
-      const sampleSites = [
-        { name: "אשדוד מרכז", lat: 31.8044, lon: 34.6553, band: "B3/B7" },
-        { name: "תל אביב עזריאלי", lat: 32.0741, lon: 34.7922, band: "B3/n78" },
-        { name: "ירושלים גבעת רם", lat: 31.7781, lon: 35.1984, band: "B3/B20" },
-        { name: "חיפה כרמל", lat: 32.8012, lon: 34.9896, band: "B3/B7" },
-        { name: "באר שבע הנגב", lat: 31.2518, lon: 34.7913, band: "B3/B20" }
-      ];
-
-      const navContainer =
-        document.querySelector("nav, .tabs, .nav-tabs, [role='tablist']") ||
-        document.body.firstElementChild;
-
-      const mapTabBtn = document.createElement("button");
-      mapTabBtn.id = "rt-map-tab-btn";
-      mapTabBtn.type = "button";
-      mapTabBtn.textContent = "מפה";
-      mapTabBtn.style.cssText = "padding:6px 12px;border-radius:8px;background:#0f766e;color:#f0fdfa;font-weight:700;font-size:12px;border:1px solid #2dd4bf;cursor:pointer;";
-
-      if (navContainer) {
-        navContainer.appendChild(mapTabBtn);
-      }
-
-      const panel = document.createElement("div");
-      panel.id = "rt-map-panel";
-      panel.innerHTML = `
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
-          <strong style="font-size:13px;">מפת תחנות בסיס בישראל ומיקום חי</strong>
-          <button id="rt-center-user-map-btn" type="button" style="background:#2563eb;color:#fff;border:none;border-radius:7px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;">
-            מרכז למיקומי הנוכחי
-          </button>
-        </div>
-        <div id="rt-map-canvas">
-          <div id="rt-map-follow-tooltip">ממתין למיקום ונתוני תחנה מחוברת...</div>
-        </div>
-      `;
-
-      const anchorSection = document.querySelector("main, .main-content, #app") || document.body;
-      anchorSection.insertBefore(panel, anchorSection.firstChild);
-
-      let userCoords = { lat: 31.8044, lon: 34.6553 };
-      let centerOnUser = true;
-
-      function updateUserGps() {
-        if (!navigator.geolocation) return;
-        navigator.geolocation.getCurrentPosition(
-          pos => {
-            userCoords = { lat: pos.coords.latitude, lon: pos.coords.longitude };
-            drawMap();
-          },
-          () => {},
-          { enableHighAccuracy: true, maximumAge: 5000, timeout: 4000 }
-        );
-      }
-
-      function latLonToXY(lat, lon, w, h) {
-        const minLat = 29.5, maxLat = 33.3;
-        const minLon = 34.2, maxLon = 35.9;
-        const x = ((lon - minLon) / (maxLon - minLon)) * (w - 40) + 20;
-        const y = h - (((lat - minLat) / (maxLat - minLat)) * (h - 40) + 20);
-        return { x: Math.max(14, Math.min(w - 14, x)), y: Math.max(14, Math.min(h - 14, y)) };
-      }
-
-      function drawMap() {
-        const canvasDiv = document.getElementById("rt-map-canvas");
-        const tooltip = document.getElementById("rt-map-follow-tooltip");
-        if (!canvasDiv || !tooltip) return;
-
-        let svg = canvasDiv.querySelector("svg");
-        if (!svg) {
-          svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-          svg.setAttribute("width", "100%");
-          svg.setAttribute("height", "100%");
-          svg.style.display = "block";
-          canvasDiv.insertBefore(svg, tooltip);
-        }
-
-        const w = canvasDiv.clientWidth || 340;
-        const h = canvasDiv.clientHeight || 320;
-        svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
-        while (svg.firstChild) svg.removeChild(svg.firstChild);
-
-        const st = window.state || {};
-        const sc = st.servingCell || {};
-        const rf = st.rf || {};
-        const pci = sc.pci ?? sc.physicalCellId ?? "-";
-        const cellId = sc.eci ?? sc.nci ?? sc.cid ?? "-";
-        const band = cleanBandString(sc.band || sc.earfcn || "-");
-        const rsrp = rf.rsrp ?? sc.rsrp ?? "-";
-        const sinr = rf.sinr ?? sc.sinr ?? "-";
-
-        const activeSite = sampleSites[0];
-        const uPt = centerOnUser
-          ? { x: w * 0.5, y: h * 0.62 }
-          : latLonToXY(userCoords.lat, userCoords.lon, w, h);
-        const sPt = latLonToXY(activeSite.lat, activeSite.lon, w, h);
-
-        sampleSites.forEach(site => {
-          const pt = centerOnUser
-            ? {
-                x: uPt.x + (site.lon - userCoords.lon) * 140,
-                y: uPt.y - (site.lat - userCoords.lat) * 140
-              }
-            : latLonToXY(site.lat, site.lon, w, h);
-          const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-          circle.setAttribute("cx", String(pt.x));
-          circle.setAttribute("cy", String(pt.y));
-          circle.setAttribute("r", "5");
-          circle.setAttribute("fill", "#38bdf8");
-          svg.appendChild(circle);
-        });
-
-        const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
-        line.setAttribute("x1", String(uPt.x));
-        line.setAttribute("y1", String(uPt.y));
-        line.setAttribute("x2", String(sPt.x));
-        line.setAttribute("y2", String(sPt.y));
-        line.setAttribute("stroke", "#f97316");
-        line.setAttribute("stroke-width", "3.5");
-        line.setAttribute("stroke-dasharray", "6,3");
-        svg.appendChild(line);
-
-        const userDot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-        userDot.setAttribute("cx", String(uPt.x));
-        userDot.setAttribute("cy", String(uPt.y));
-        userDot.setAttribute("r", "7");
-        userDot.setAttribute("fill", "#22c55e");
-        userDot.setAttribute("stroke", "#ffffff");
-        userDot.setAttribute("stroke-width", "2");
-        svg.appendChild(userDot);
-
-        tooltip.style.top = `${Math.max(8, Math.min(h - 95, uPt.y - 76))}px`;
-        tooltip.style.left = `${Math.max(8, Math.min(w - 250, uPt.x - 110))}px`;
-        tooltip.innerHTML = `
-          <div><strong>מיקום נוכחי:</strong> ${userCoords.lat.toFixed(4)}, ${userCoords.lon.toFixed(4)}</div>
-          <div><strong>תחנה מחוברת:</strong> PCI ${pci} | ID ${cellId}</div>
-          <div><strong>תדר/רשת:</strong> ${band}</div>
-          <div><strong>קליטה:</strong> RSRP ${rsrp} dBm | SINR ${sinr} dB</div>
-        `;
-      }
-
-      mapTabBtn.addEventListener("click", () => {
-        const isActive = panel.classList.toggle("active");
-        if (isActive) {
-          updateUserGps();
-          drawMap();
-        }
-      });
-
-      document.getElementById("rt-center-user-map-btn").addEventListener("click", () => {
-        centerOnUser = true;
-        updateUserGps();
-        drawMap();
-      });
-
-      setInterval(() => {
-        if (panel.classList.contains("active")) {
-          drawMap();
-        }
-      }, 2000);
-    }
-
-    function runAllUiEnhancements() {
-      setupTopBarHelpAndExit();
-      normalizeBandAndUnits();
-      enhanceChartAndAxes();
-      setupIsraelBaseStationsMapTab();
-    }
-
-    if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", runAllUiEnhancements);
-    } else {
-      runAllUiEnhancements();
-    }
-    setInterval(() => {
-      normalizeBandAndUnits();
-      setupTopBarHelpAndExit();
-    }, 2500);
-  })();
-
-
-  (function() {
-    if (window.__rtIsoStandardLayoutInstalled) return;
-    window.__rtIsoStandardLayoutInstalled = true;
-
-    const style = document.createElement("style");
-    style.id = "rt-iso-standard-layout-style";
-    style.textContent = `
-      #rt-floating-exit-btn, .rt-floating-exit, [data-floating-exit="true"],
-      #rt-exit-action-strip {
-        display: none !important;
-      }
-      .rt-iso-topbar {
-        display: flex !important;
-        align-items: center !important;
-        justify-content: space-between !important;
-        gap: 8px !important;
-        flex-wrap: wrap !important;
-        padding: 8px 10px !important;
-        min-height: 44px !important;
-        box-sizing: border-box !important;
-      }
-      .rt-iso-left-actions {
-        display: flex !important;
-        align-items: center !important;
-        gap: 8px !important;
-        flex-shrink: 0 !important;
-      }
-      #rt-explicit-exit-btn {
-        position: static !important;
-        min-height: 40px !important;
-        padding: 6px 12px !important;
-        border-radius: 8px !important;
-        background: #b91c1c !important;
-        color: #ffffff !important;
-        border: 1px solid #f87171 !important;
-        font-weight: 700 !important;
-        font-size: 12px !important;
-        cursor: pointer !important;
-      }
-      #rt-help-menu-btn {
-        position: static !important;
-        min-height: 40px !important;
-        padding: 6px 12px !important;
-        border-radius: 8px !important;
-        background: #1e3a8a !important;
-        color: #eff6ff !important;
-        border: 1px solid #60a5fa !important;
-        font-weight: 700 !important;
-        font-size: 12px !important;
-        cursor: pointer !important;
-      }
-      #rt-help-drawer-modal {
-        position: fixed !important;
-        inset: 0 !important;
-        background: rgba(2, 6, 23, 0.84) !important;
-        z-index: 99995 !important;
-        display: none;
-        align-items: center !important;
-        justify-content: center !important;
-        padding: 16px !important;
-      }
-      #rt-help-drawer-modal.open {
-        display: flex !important;
-      }
-      .rt-help-drawer-card {
-        width: 100%;
-        max-width: 420px;
-        background: #0f172a;
-        color: #f8fafc;
-        border: 1px solid #334155;
-        border-radius: 14px;
-        padding: 16px;
-        text-align: right;
-      }
-      .rt-ltr-num {
-        direction: ltr !important;
-        unicode-bidi: isolate !important;
-        font-variant-numeric: tabular-nums !important;
-        white-space: nowrap !important;
-      }
-      .rt-unit-inline {
-        display: inline !important;
-        white-space: nowrap !important;
-        direction: ltr !important;
-        unicode-bidi: isolate !important;
-        font-size: 0.75em !important;
-        margin-right: 4px !important;
-      }
-      .rt-tabs-row {
-        display: flex !important;
-        align-items: center !important;
-        gap: 6px !important;
-        overflow-x: auto !important;
-        padding: 6px 8px !important;
-      }
-      #rt-map-tab-btn {
-        min-height: 40px !important;
-        padding: 6px 12px !important;
-        border-radius: 8px !important;
-        background: #0f766e !important;
-        color: #f0fdfa !important;
-        border: 1px solid #2dd4bf !important;
-        font-weight: 700 !important;
-        font-size: 12px !important;
-        white-space: nowrap !important;
-        cursor: pointer !important;
-      }
-      #rt-map-panel {
-        display: none;
-        background: #0f172a;
-        border: 1px solid #1e293b;
-        border-radius: 12px;
-        padding: 12px;
-        margin: 8px 0;
-        color: #f1f5f9;
-      }
-      #rt-map-panel.active {
-        display: block;
-      }
-      #rt-map-canvas {
-        width: 100%;
-        height: 320px;
-        position: relative;
-        overflow: hidden;
-        border-radius: 10px;
-        background: #061021;
-        border: 1px solid #1e3a5f;
-      }
-      #rt-map-follow-tooltip {
-        position: absolute;
-        max-width: 260px;
-        background: rgba(15, 23, 42, 0.94);
-        border: 1px solid #38bdf8;
-        border-radius: 8px;
-        padding: 8px 10px;
-        font-size: 11px;
-        line-height: 1.45;
-        color: #f8fafc;
-        pointer-events: none;
-        z-index: 25;
-      }
-      .rt-chart-box {
-        width: 100% !important;
-        min-height: 240px !important;
-        box-sizing: border-box !important;
-      }
-      .rt-chart-box.expanded {
-        min-height: 380px !important;
-      }
-    `;
-    document.head.appendChild(style);
-
-    const BAND_MAP_IL = {
-      "B1": "2100 MHz (1920-1980 / 2110-2170 MHz)",
-      "B3": "1800 MHz (1710-1785 / 1805-1880 MHz)",
-      "B7": "2600 MHz (2500-2570 / 2620-2690 MHz)",
-      "B8": "900 MHz (880-915 / 925-960 MHz)",
-      "B20": "800 MHz (832-862 / 791-821 MHz)",
-      "B28": "700 MHz (703-748 / 758-803 MHz)",
-      "n28": "700 MHz NR (703-748 / 758-803 MHz)",
-      "n78": "3500 MHz NR (3300-3800 MHz)"
-    };
-
-    function formatBandClean(val) {
-      if (!val) return "";
-      const s = String(val).replace(/\)\)+/g, ")").replace(/\(\(+/g, "(").trim();
-      const m = s.match(/(n?\d{1,3})/i);
-      if (!m) return s;
-      const key = (s.toLowerCase().includes("nr") && !m[1].toLowerCase().startsWith("n")) ? "n" + m[1] : m[1];
-      const norm = key.length > 1 && key[0].toLowerCase() === "b" ? "B" + key.slice(1) : key;
-      const range = BAND_MAP_IL[norm] || BAND_MAP_IL[norm.toUpperCase()];
-      return range ? `${norm} (${range})` : s;
-    }
-
-    function applyIsoTopbarAndHelp() {
-      Array.from(document.querySelectorAll("button, a, div, span")).forEach(el => {
-        if (el.children.length === 0 && (el.textContent || "").trim() === "4636" && !el.closest("#rt-help-drawer-modal")) {
-          el.style.display = "none";
-        }
-      });
-
-      const exitBtn = document.getElementById("rt-explicit-exit-btn");
-      const headerEl =
-        (exitBtn && exitBtn.closest("header, nav, .header, .top-bar")) ||
-        document.querySelector("header, nav, .header, .top-bar") ||
-        document.body.firstElementChild;
-
-      let leftGroup = document.getElementById("rt-iso-left-actions");
-      if (!leftGroup) {
-        leftGroup = document.createElement("div");
-        leftGroup.id = "rt-iso-left-actions";
-        leftGroup.className = "rt-iso-left-actions";
-      }
-      if (exitBtn && exitBtn.parentElement !== leftGroup) {
-        leftGroup.appendChild(exitBtn);
-      }
-
-      let helpBtn = document.getElementById("rt-help-menu-btn");
-      if (!helpBtn) {
-        helpBtn = document.createElement("button");
-        helpBtn.id = "rt-help-menu-btn";
-        helpBtn.type = "button";
-        helpBtn.textContent = "עזרה ?";
-        leftGroup.appendChild(helpBtn);
-      } else if (helpBtn.parentElement !== leftGroup) {
-        leftGroup.appendChild(helpBtn);
-      }
-
-      if (headerEl && leftGroup.parentElement !== headerEl) {
-        headerEl.classList.add("rt-iso-topbar");
-        headerEl.insertBefore(leftGroup, headerEl.firstChild);
-      }
-
-      if (!document.getElementById("rt-help-drawer-modal")) {
-        const modal = document.createElement("div");
-        modal.id = "rt-help-drawer-modal";
-        modal.innerHTML = `
-          <div class="rt-help-drawer-card">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-              <strong>עזרה ואפשרויות טכנאי</strong>
-              <button id="rt-help-modal-close" type="button" style="background:#334155;color:#fff;border:none;border-radius:6px;padding:4px 10px;cursor:pointer;">סגור</button>
-            </div>
-            <p style="font-size:12px;color:#cbd5e1;margin:0 0 12px 0;">
-              תפריט שירות ואבחון מתקדם (4636) מרוכז בתוך העזרה לשמירה על שורת כותרת נקייה.
-            </p>
-            <div style="display:flex;gap:8px;flex-wrap:wrap;">
-              <button id="rt-help-4636-action" type="button" style="background:#0284c7;color:#fff;border:none;border-radius:8px;padding:8px 12px;font-weight:700;cursor:pointer;">
-                טכנאי / חיוג 4636
-              </button>
-              <button id="rt-help-shizuku-action" type="button" style="background:#334155;color:#fff;border:none;border-radius:8px;padding:8px 12px;font-weight:600;cursor:pointer;">
-                פתיחת Shizuku
-              </button>
-            </div>
-          </div>
-        `;
-        document.body.appendChild(modal);
-
-        helpBtn.addEventListener("click", () => modal.classList.add("open"));
-        modal.addEventListener("click", e => {
-          if (e.target === modal) modal.classList.remove("open");
-        });
-        document.getElementById("rt-help-modal-close").addEventListener("click", () => modal.classList.remove("open"));
-        document.getElementById("rt-help-4636-action").addEventListener("click", () => {
-          try { if (typeof addLog === "function") addLog("SYS", "HELP", "הפעלת כלי טכנאי 4636 מתוך תפריט העזרה"); } catch (_e) {}
-          if (window.AndroidModem && typeof window.AndroidModem.dialTechnicianCode === "function") {
-            window.AndroidModem.dialTechnicianCode("*#*#4636#*#*");
-          }
-        });
-        document.getElementById("rt-help-shizuku-action").addEventListener("click", () => {
-          if (window.AndroidModem && typeof window.AndroidModem.openShizukuApp === "function") {
-            window.AndroidModem.openShizukuApp();
-          }
-        });
-      }
-    }
-
-    function normalizeBandsAndInlineUnits() {
-      const nodes = Array.from(document.querySelectorAll("*")).filter(el => {
-        if (el.children.length > 0) return false;
-        const t = (el.textContent || "").trim();
-        return /^B\d{1,2}\s*\(|^n\d{1,3}\s*\(/i.test(t) && t.includes("MHz");
-      });
-      nodes.forEach(el => {
-        const cleaned = formatBandClean(el.textContent);
-        if (cleaned && el.textContent !== cleaned) el.textContent = cleaned;
-      });
-
-      const unitEls = Array.from(document.querySelectorAll("span, div, small, label")).filter(el => {
-        if (el.children.length > 0 || el.dataset.rtUnitDone === "1") return false;
-        const txt = (el.textContent || "").trim();
-        return txt === "dBm" || txt === "dB";
-      });
-      unitEls.forEach(el => {
-        el.dataset.rtUnitDone = "1";
-        el.classList.add("rt-unit-inline");
-        if (el.parentElement) {
-          el.parentElement.style.display = "inline-flex";
-          el.parentElement.style.alignItems = "baseline";
-          el.parentElement.style.flexWrap = "nowrap";
-          el.parentElement.style.gap = "4px";
-        }
-      });
-    }
-
-    function enhanceChartAxesAndToggle() {
-      const canvases = Array.from(document.querySelectorAll("canvas"));
-      const target = canvases.find(c => /signal|chart|live/i.test(c.id || "")) || canvases[0];
-      if (!target || target.dataset.rtChartDone === "1") return;
-      target.dataset.rtChartDone = "1";
-
-      const box = target.parentElement;
-      if (!box) return;
-      box.classList.add("rt-chart-box");
-
-      const bar = document.createElement("div");
-      bar.style.cssText = "display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;font-size:11px;color:#94a3b8;";
-      bar.innerHTML = `
-        <span>ציר Y: dBm / dB | ציר X: דגימות / זמן</span>
-        <button id="rt-chart-expand-toggle" type="button" style="background:#1e293b;color:#f8fafc;border:1px solid #475569;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;">
-          הגדל גרף
-        </button>
-      `;
-      box.insertBefore(bar, target);
-
-      const btn = document.getElementById("rt-chart-expand-toggle");
-      btn.addEventListener("click", () => {
-        const exp = box.classList.toggle("expanded");
-        if (exp) {
-          box.style.height = "380px";
-          target.style.height = "315px";
-          btn.textContent = "צמצם גרף";
-        } else {
-          box.style.height = "";
-          target.style.height = "195px";
-          btn.textContent = "הגדל גרף";
-        }
-        target.width = target.clientWidth || 320;
-        target.height = target.clientHeight || 200;
-      });
-    }
-
-    function setupIsraelMapTab() {
-      if (document.getElementById("rt-map-tab-btn")) return;
-
-      const sites = [
-        { name: "אשדוד מרכז", lat: 31.8044, lon: 34.6553 },
-        { name: "תל אביב עזריאלי", lat: 32.0741, lon: 34.7922 },
-        { name: "ירושלים קריית הלאום", lat: 31.7781, lon: 35.1984 },
-        { name: "חיפה מרכז הכרמל", lat: 32.8012, lon: 34.9896 },
-        { name: "באר שבע צפון", lat: 31.2518, lon: 34.7913 }
-      ];
-
-      const tabsHost = document.querySelector("nav, .tabs, .nav-tabs, [role='tablist']") || document.body.firstElementChild;
-      const mapBtn = document.createElement("button");
-      mapBtn.id = "rt-map-tab-btn";
-      mapBtn.type = "button";
-      mapBtn.textContent = "מפה";
-      if (tabsHost) {
-        tabsHost.classList.add("rt-tabs-row");
-        tabsHost.appendChild(mapBtn);
-      }
-
-      const panel = document.createElement("div");
-      panel.id = "rt-map-panel";
-      panel.innerHTML = `
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
-          <strong style="font-size:13px;">מפת תחנות בסיס בישראל ומיקום חי</strong>
-          <button id="rt-map-center-btn" type="button" style="background:#2563eb;color:#fff;border:none;border-radius:7px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer;">
-            מרכז למיקומי הנוכחי
-          </button>
-        </div>
-        <div id="rt-map-canvas">
-          <div id="rt-map-follow-tooltip">ממתין למיקום ונתוני תחנה מחוברת...</div>
-        </div>
-      `;
-
-      const mainHost = document.querySelector("main, .main-content, #app") || document.body;
-      mainHost.insertBefore(panel, mainHost.firstChild);
-
-      let coords = { lat: 31.8044, lon: 34.6553 };
-      let followMe = true;
-
-      function pollLocation() {
-        if (!navigator.geolocation) return;
-        navigator.geolocation.getCurrentPosition(
-          p => {
-            coords = { lat: p.coords.latitude, lon: p.coords.longitude };
-            renderMap();
-          },
-          () => {},
-          { enableHighAccuracy: true, maximumAge: 5000, timeout: 4000 }
-        );
-      }
-
-      function proj(lat, lon, w, h) {
-        const x = ((lon - 34.2) / (35.9 - 34.2)) * (w - 36) + 18;
-        const y = h - (((lat - 29.5) / (33.3 - 29.5)) * (h - 36) + 18);
-        return { x: Math.max(14, Math.min(w - 14, x)), y: Math.max(14, Math.min(h - 14, y)) };
-      }
-
-      function renderMap() {
-        const canvas = document.getElementById("rt-map-canvas");
-        const tip = document.getElementById("rt-map-follow-tooltip");
-        if (!canvas || !tip) return;
-
-        let svg = canvas.querySelector("svg");
-        if (!svg) {
-          svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-          svg.setAttribute("width", "100%");
-          svg.setAttribute("height", "100%");
-          canvas.insertBefore(svg, tip);
-        }
-
-        const w = canvas.clientWidth || 340;
-        const h = canvas.clientHeight || 320;
-        svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
-        while (svg.firstChild) svg.removeChild(svg.firstChild);
-
-        const st = window.state || {};
-        const sc = st.servingCell || {};
-        const rf = st.rf || {};
-        const pci = sc.pci ?? sc.physicalCellId ?? "-";
-        const cid = sc.eci ?? sc.nci ?? sc.cid ?? "-";
-        const band = formatBandClean(sc.band || sc.earfcn || "-");
-        const rsrp = rf.rsrp ?? sc.rsrp ?? "-";
-        const sinr = rf.sinr ?? sc.sinr ?? "-";
-
-        const activeSite = sites[0];
-        const mePt = followMe ? { x: w * 0.5, y: h * 0.62 } : proj(coords.lat, coords.lon, w, h);
-        const sitePt = proj(activeSite.lat, activeSite.lon, w, h);
-
-        sites.forEach(s => {
-          const pt = followMe
-            ? { x: mePt.x + (s.lon - coords.lon) * 135, y: mePt.y - (s.lat - coords.lat) * 135 }
-            : proj(s.lat, s.lon, w, h);
-          const dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-          dot.setAttribute("cx", String(pt.x));
-          dot.setAttribute("cy", String(pt.y));
-          dot.setAttribute("r", "5");
-          dot.setAttribute("fill", "#38bdf8");
-          svg.appendChild(dot);
-        });
-
-        const linkLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
-        linkLine.setAttribute("x1", String(mePt.x));
-        linkLine.setAttribute("y1", String(mePt.y));
-        linkLine.setAttribute("x2", String(sitePt.x));
-        linkLine.setAttribute("y2", String(sitePt.y));
-        linkLine.setAttribute("stroke", "#f97316");
-        linkLine.setAttribute("stroke-width", "3.5");
-        svg.appendChild(linkLine);
-
-        const meDot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-        meDot.setAttribute("cx", String(mePt.x));
-        meDot.setAttribute("cy", String(mePt.y));
-        meDot.setAttribute("r", "7");
-        meDot.setAttribute("fill", "#22c55e");
-        meDot.setAttribute("stroke", "#ffffff");
-        meDot.setAttribute("stroke-width", "2");
-        svg.appendChild(meDot);
-
-        tip.style.top = `${Math.max(8, Math.min(h - 96, mePt.y - 78))}px`;
-        tip.style.left = `${Math.max(8, Math.min(w - 245, mePt.x - 105))}px`;
-        tip.innerHTML = `
-          <div><strong>מיקום:</strong> <span class="rt-ltr-num">${coords.lat.toFixed(4)}, ${coords.lon.toFixed(4)}</span></div>
-          <div><strong>תחנה מחוברת:</strong> PCI <span class="rt-ltr-num">${pci}</span> | ID <span class="rt-ltr-num">${cid}</span></div>
-          <div><strong>Band:</strong> <span class="rt-ltr-num">${band}</span></div>
-          <div><strong>קליטה:</strong> <span class="rt-ltr-num">RSRP ${rsrp} dBm | SINR ${sinr} dB</span></div>
-        `;
-      }
-
-      mapBtn.addEventListener("click", () => {
-        const open = panel.classList.toggle("active");
-        if (open) {
-          pollLocation();
-          renderMap();
-        }
-      });
-
-      document.getElementById("rt-map-center-btn").addEventListener("click", () => {
-        followMe = true;
-        pollLocation();
-        renderMap();
-      });
-
-      setInterval(() => {
-        if (panel.classList.contains("active")) renderMap();
-      }, 2000);
-    }
-
-    function runIsoPass() {
-      applyIsoTopbarAndHelp();
-      normalizeBandsAndInlineUnits();
-      enhanceChartAxesAndToggle();
-      setupIsraelMapTab();
-    }
-
-    if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", runIsoPass);
-    } else {
-      runIsoPass();
-    }
-    setInterval(() => {
-      applyIsoTopbarAndHelp();
-      normalizeBandsAndInlineUnits();
-    }, 2500);
-  })();
-
-</script>
-
-
-
-
-
-<script id="rt-fast-clean-v41">
-(function() {
-  if (window.__rtFastCleanV41) return;
-  window.__rtFastCleanV41 = true;
-
-  const BAND_INFO = {
+  const BANDS = {
     "B1": "2100 MHz (1920-1980 / 2110-2170 MHz)",
     "B3": "1800 MHz (1710-1785 / 1805-1880 MHz)",
     "B7": "2600 MHz (2500-2570 / 2620-2690 MHz)",
@@ -2945,17 +1234,17 @@ ${sampledRows.join('\n')}`;
     "n78": "3500 MHz NR (3300-3800 MHz)"
   };
 
-  function fmtBand(raw) {
-    if (!raw || String(raw).trim() === "---") return "---";
-    const s = String(raw).replace(/\)\)+/g, ")").replace(/\(\(+/g, "(").trim();
+  function fmtBand(v) {
+    if (!v || String(v).trim() === "---") return "---";
+    const s = String(v).replace(/\)\)+/g, ")").replace(/\(\(+/g, "(").trim();
     const m = s.match(/\b(n?\d{1,3})\b/i);
     if (!m) return s;
     const code = m[1].toLowerCase().startsWith("n") ? "n" + m[1].slice(1) : "B" + m[1];
-    return BAND_INFO[code] ? `${code} (${BAND_INFO[code]})` : s;
+    return BANDS[code] ? `${code} (${BANDS[code]})` : s;
   }
 
-  // Remove any extra map buttons outside #tab-btn-map and enforce single exit + single chart expand control
-  function cleanupExtraButtons() {
+  // Deduplicate extra map/exit buttons once on load
+  function hideExtraControls() {
     document.querySelectorAll("button").forEach(btn => {
       if (btn.id === "tab-btn-map" || btn.id === "rt-explicit-exit-btn" || btn.id === "rt-chart-expand-btn") return;
       const t = (btn.textContent || "").trim();
@@ -2963,135 +1252,6 @@ ${sampledRows.join('\n')}`;
         btn.style.display = "none";
       }
     });
-    ["#rt-floating-exit-btn", "#rt-exit-action-strip", "#rt-toggle-chart-size-btn", "#rt-chart-expand-toggle"].forEach(sel => {
-      const el = document.querySelector(sel);
-      if (el) el.style.display = "none";
-    });
-  }
-
-  // Ensure live samples also populate state.history so the live waveform chart always renders real telemetry
-  if (typeof window.onRealModemData === "function" && !window.onRealModemData._rtChartFeed) {
-    const prevOnData = window.onRealModemData;
-    window.onRealModemData = function(data) {
-      const r = prevOnData.apply(this, arguments);
-      try {
-        const st = window.state;
-        if (st && st.rf) {
-          const rsrp = st.rf.rsrp;
-          const rssi = st.rf.rssi;
-          const sinr = st.rf.sinr;
-          if (rsrp !== null || rssi !== null || sinr !== null) {
-            st.history = st.history || [];
-            const last = st.history[st.history.length - 1];
-            const sameAsLast = last && last.rsrp === rsrp && last.rssi === rssi && last.sinr === sinr && last._ts === Date.now();
-            if (!sameAsLast) {
-              st.history.push({
-                rsrp: typeof rsrp === "number" ? rsrp : -100,
-                rssi: typeof rssi === "number" ? rssi : -85,
-                sinr: typeof sinr === "number" ? sinr : 0,
-                _ts: Date.now()
-              });
-              if (st.history.length > 90) st.history.shift();
-            }
-          }
-        }
-      } catch (_e) {}
-      return r;
-    };
-    window.onRealModemData._rtChartFeed = true;
-  }
-
-  // Draw crisp axis ticks & labels on #rfChart and render only when #view-live is visible (saves CPU/battery)
-  function patchLiveChartRendering() {
-    const canvas = document.getElementById("rfChart");
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx || canvas._rtPatched) return;
-    canvas._rtPatched = true;
-
-    const origRAF = window.requestAnimationFrame;
-    let lastDraw = 0;
-
-    window.renderLiveChart = function() {
-      const now = performance.now();
-      const liveSec = document.getElementById("view-live");
-      const isLiveVisible = liveSec && !liveSec.classList.contains("hidden");
-      if (!isLiveVisible) {
-        origRAF.call(window, function() { setTimeout(window.renderLiveChart, 350); });
-        return;
-      }
-      if (now - lastDraw < 140) {
-        origRAF.call(window, window.renderLiveChart);
-        return;
-      }
-      lastDraw = now;
-
-      const dpr = window.devicePixelRatio || 1;
-      const rect = canvas.getBoundingClientRect();
-      const w = rect.width || canvas.parentElement?.clientWidth || 320;
-      const h = rect.height || canvas.parentElement?.clientHeight || 130;
-      if (w > 0 && h > 0 && (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr))) {
-        canvas.width = Math.round(w * dpr);
-        canvas.height = Math.round(h * dpr);
-      }
-
-      ctx.save();
-      ctx.scale(dpr, dpr);
-      ctx.clearRect(0, 0, w, h);
-
-      // Grid + Y/X axis labels
-      ctx.strokeStyle = "#1e293b";
-      ctx.lineWidth = 1;
-      ctx.font = "9px monospace";
-      ctx.fillStyle = "#94a3b8";
-      const yTicks = [
-        { ratio: 0.15, label: "-55 dBm" },
-        { ratio: 0.50, label: "-95 dBm" },
-        { ratio: 0.85, label: "-135 dBm" }
-      ];
-      yTicks.forEach(t => {
-        const y = Math.round(h * t.ratio);
-        ctx.beginPath();
-        ctx.moveTo(42, y);
-        ctx.lineTo(w - 6, y);
-        ctx.stroke();
-        ctx.fillText(t.label, 2, y + 3);
-      });
-      ctx.fillText("X: דגימות אחרונות", Math.max(46, w - 98), h - 3);
-
-      const st = window.state || {};
-      const hist = Array.isArray(st.history) && st.history.length > 0
-        ? st.history
-        : (Array.isArray(st.liveSamples) ? st.liveSamples.slice(-90) : []);
-
-      if (hist.length > 1) {
-        const plotW = Math.max(20, w - 48);
-        const plotH = Math.max(20, h - 18);
-        const stepX = plotW / Math.max(1, hist.length - 1);
-        const drawSeries = (key, minV, maxV, color) => {
-          ctx.beginPath();
-          ctx.strokeStyle = color;
-          ctx.lineWidth = 1.8;
-          hist.forEach((pt, idx) => {
-            const rawV = pt[key] ?? pt?.rf?.[key];
-            if (typeof rawV !== "number" || Number.isNaN(rawV)) return;
-            const norm = Math.min(1, Math.max(0, (rawV - minV) / (maxV - minV)));
-            const x = 44 + idx * stepX;
-            const y = 6 + (1 - norm) * (plotH - 8);
-            if (idx === 0) ctx.moveTo(x, y);
-            else ctx.lineTo(x, y);
-          });
-          ctx.stroke();
-        };
-        drawSeries("rsrp", -135, -55, "#34d399");
-        drawSeries("rssi", -115, -40, "#fbbf24");
-        drawSeries("sinr", -10, 30, "#818cf8");
-      }
-
-      ctx.restore();
-      origRAF.call(window, window.renderLiveChart);
-    };
-    window.renderLiveChart();
   }
 
   window.rtTriggerCleanExit = function() {
@@ -3138,7 +1298,7 @@ ${sampledRows.join('\n')}`;
     dlg.style.display = "flex";
   };
 
-  function ensureMapView() {
+  function ensureMapTab() {
     if (document.getElementById("view-map")) return;
     const liveView = document.getElementById("view-live");
     const host = (liveView && liveView.parentElement) || document.body;
@@ -3160,11 +1320,11 @@ ${sampledRows.join('\n')}`;
     else host.appendChild(sec);
 
     const towers = [
-      { name: "אשדוד", lat: 31.8044, lon: 34.6553 },
-      { name: "תל אביב", lat: 32.0741, lon: 34.7922 },
-      { name: "ירושלים", lat: 31.7781, lon: 35.1984 },
-      { name: "חיפה", lat: 32.8012, lon: 34.9896 },
-      { name: "באר שבע", lat: 31.2518, lon: 34.7913 }
+      { lat: 31.8044, lon: 34.6553 },
+      { lat: 32.0741, lon: 34.7922 },
+      { lat: 31.7781, lon: 35.1984 },
+      { lat: 32.8012, lon: 34.9896 },
+      { lat: 31.2518, lon: 34.7913 }
     ];
     let gps = { lat: 31.8044, lon: 34.6553 };
     let centered = true;
@@ -3191,30 +1351,12 @@ ${sampledRows.join('\n')}`;
       svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
       while (svg.firstChild) svg.removeChild(svg.firstChild);
 
-      // Map grid & stylized Israel coast/outline so a real map context is always visible
-      for (let gx = 1; gx < 5; gx++) {
-        const vx = Math.round((w / 5) * gx);
-        const gl = document.createElementNS("http://www.w3.org/2000/svg", "line");
-        gl.setAttribute("x1", String(vx)); gl.setAttribute("y1", "0");
-        gl.setAttribute("x2", String(vx)); gl.setAttribute("y2", String(h));
-        gl.setAttribute("stroke", "#0f2942"); gl.setAttribute("stroke-width", "1");
-        svg.appendChild(gl);
-      }
-      for (let gy = 1; gy < 5; gy++) {
-        const hy = Math.round((h / 5) * gy);
-        const gl = document.createElementNS("http://www.w3.org/2000/svg", "line");
-        gl.setAttribute("x1", "0"); gl.setAttribute("y1", String(hy));
-        gl.setAttribute("x2", String(w)); gl.setAttribute("y2", String(hy));
-        gl.setAttribute("stroke", "#0f2942"); gl.setAttribute("stroke-width", "1");
-        svg.appendChild(gl);
-      }
-
       const ilPoly = [
         [33.25, 35.55], [32.85, 35.05], [32.08, 34.77], [31.50, 34.45],
         [31.22, 34.25], [29.52, 34.95], [31.10, 35.38], [32.45, 35.60]
       ].map(([la, lo]) => {
-        const p = toXY(la, lo, w, h);
-        return `${p.x.toFixed(1)},${p.y.toFixed(1)}`;
+        const pt = toXY(la, lo, w, h);
+        return `${pt.x.toFixed(1)},${pt.y.toFixed(1)}`;
       }).join(" ");
       const poly = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
       poly.setAttribute("points", ilPoly);
@@ -3280,67 +1422,154 @@ ${sampledRows.join('\n')}`;
     });
   }
 
-  const origSwitchTab = window.switchTab;
+  const baseSwitchTab = window.switchTab;
   window.switchTab = function(tabName) {
-    ensureMapView();
-    const mapView = document.getElementById("view-map");
+    ensureMapTab();
+    const mv = document.getElementById("view-map");
     if (tabName === "map") {
       document.querySelectorAll(".tab-view").forEach(v => v.classList.add("hidden"));
       document.querySelectorAll(".tab-btn").forEach(b => {
         b.className = "tab-btn py-1 rounded-md text-slate-400 hover:text-white transition";
       });
-      if (mapView) mapView.classList.remove("hidden");
+      if (mv) mv.classList.remove("hidden");
       const mb = document.getElementById("tab-btn-map");
       if (mb) mb.className = "tab-btn py-1 rounded-md bg-cyan-600 text-white transition";
       window.rtRenderIsraelMap();
       return;
     }
-    if (mapView) mapView.classList.add("hidden");
-    if (typeof origSwitchTab === "function") origSwitchTab(tabName);
+    if (mv) mv.classList.add("hidden");
+    if (typeof baseSwitchTab === "function") baseSwitchTab(tabName);
   };
 
-  function syncLight() {
-    cleanupExtraButtons();
+  // Feed live chart from state.history / state.liveSamples and draw once per second while #view-live is open
+  function drawLiveChartOnce() {
+    const liveView = document.getElementById("view-live");
+    if (!liveView || liveView.classList.contains("hidden")) return;
+    const canvas = document.getElementById("rfChart");
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const rect = canvas.getBoundingClientRect();
+    const w = Math.round(rect.width || canvas.parentElement?.clientWidth || 320);
+    const h = Math.round(rect.height || canvas.parentElement?.clientHeight || 130);
+    if (w <= 0 || h <= 0) return;
+
+    if (canvas.width !== w * dpr || canvas.height !== h * dpr) {
+      canvas.width = w * dpr;
+      canvas.height = h * dpr;
+    }
+
+    ctx.save();
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, w, h);
+
+    ctx.strokeStyle = "#1e293b";
+    ctx.lineWidth = 1;
+    ctx.font = "9px monospace";
+    ctx.fillStyle = "#94a3b8";
+    [
+      { r: 0.18, l: "-55 dBm" },
+      { r: 0.50, l: "-95 dBm" },
+      { r: 0.82, l: "-135 dBm" }
+    ].forEach(t => {
+      const y = Math.round(h * t.r);
+      ctx.beginPath();
+      ctx.moveTo(42, y); ctx.lineTo(w - 6, y);
+      ctx.stroke();
+      ctx.fillText(t.l, 2, y + 3);
+    });
+    ctx.fillText("X: דגימות אחרונות", Math.max(46, w - 98), h - 3);
+
+    const st = window.state || {};
+    let series = Array.isArray(st.history) && st.history.length > 0 ? st.history : [];
+    if (series.length === 0 && Array.isArray(st.liveSamples) && st.liveSamples.length > 0) {
+      series = st.liveSamples.slice(-90).map(s => ({
+        rsrp: typeof s.rsrp === "number" ? s.rsrp : s?.rf?.rsrp,
+        rssi: typeof s.rssi === "number" ? s.rssi : s?.rf?.rssi,
+        sinr: typeof s.sinr === "number" ? s.sinr : s?.rf?.sinr
+      }));
+    }
+
+    if (series.length > 1) {
+      const plotW = Math.max(20, w - 48);
+      const plotH = Math.max(20, h - 18);
+      const stepX = plotW / Math.max(1, series.length - 1);
+      const drawLine = (key, minV, maxV, col) => {
+        ctx.beginPath();
+        ctx.strokeStyle = col;
+        ctx.lineWidth = 1.8;
+        let started = false;
+        series.forEach((pt, i) => {
+          const val = pt[key];
+          if (typeof val !== "number" || Number.isNaN(val)) return;
+          const norm = Math.min(1, Math.max(0, (val - minV) / (maxV - minV)));
+          const x = 44 + i * stepX;
+          const y = 6 + (1 - norm) * (plotH - 8);
+          if (!started) { ctx.moveTo(x, y); started = true; }
+          else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+      };
+      drawLine("rsrp", -135, -55, "#34d399");
+      drawLine("rssi", -115, -40, "#fbbf24");
+      drawLine("sinr", -10, 30, "#818cf8");
+    }
+    ctx.restore();
+  }
+
+  function addSingleChartExpandBtn() {
+    const canvas = document.getElementById("rfChart");
+    const chartSec = canvas ? canvas.closest("section") : null;
+    if (!chartSec || document.getElementById("rt-chart-expand-btn")) return;
+    const hdr = chartSec.querySelector("div");
+    if (!hdr) return;
+    const btn = document.createElement("button");
+    btn.id = "rt-chart-expand-btn";
+    btn.type = "button";
+    btn.textContent = "הגדל גרף";
+    btn.style.cssText = "background:#1e293b;color:#e2e8f0;border:1px solid #475569;border-radius:5px;padding:1px 7px;font-size:10px;cursor:pointer;";
+    btn.addEventListener("click", function() {
+      const big = chartSec.dataset.rtExpanded === "1";
+      chartSec.dataset.rtExpanded = big ? "0" : "1";
+      chartSec.style.minHeight = big ? "85px" : "250px";
+      chartSec.style.flex = big ? "1 1 0%" : "0 0 250px";
+      this.textContent = big ? "הגדל גרף" : "צמצם גרף";
+      setTimeout(drawLiveChartOnce, 50);
+    });
+    hdr.appendChild(btn);
+  }
+
+  function initOnce() {
+    ensureMapTab();
+    hideExtraControls();
+    addSingleChartExpandBtn();
     ["cell-band", "cell-bw"].forEach(id => {
       const el = document.getElementById(id);
       if (el && el.textContent && el.textContent.trim() !== "---") {
-        const next = fmtBand(el.textContent);
-        if (el.textContent !== next) el.textContent = next;
+        el.textContent = fmtBand(el.textContent);
       }
     });
-    const chartSec = document.getElementById("rfChart") ? document.getElementById("rfChart").closest("section") : null;
-    if (chartSec && !document.getElementById("rt-chart-expand-btn")) {
-      const hdr = chartSec.querySelector("div");
-      if (hdr) {
-        const btn = document.createElement("button");
-        btn.id = "rt-chart-expand-btn";
-        btn.type = "button";
-        btn.textContent = "הגדל גרף";
-        btn.style.cssText = "background:#1e293b;color:#e2e8f0;border:1px solid #475569;border-radius:5px;padding:1px 7px;font-size:10px;cursor:pointer;";
-        btn.addEventListener("click", function() {
-          const big = chartSec.dataset.rtExpanded === "1";
-          chartSec.dataset.rtExpanded = big ? "0" : "1";
-          chartSec.style.minHeight = big ? "85px" : "250px";
-          chartSec.style.flex = big ? "1 1 0%" : "0 0 250px";
-          this.textContent = big ? "הגדל גרף" : "צמצם גרף";
-        });
-        hdr.appendChild(btn);
-      }
-    }
-    const mv = document.getElementById("view-map");
-    if (mv && !mv.classList.contains("hidden") && typeof window.rtRenderIsraelMap === "function") {
-      window.rtRenderIsraelMap();
-    }
+    drawLiveChartOnce();
   }
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", () => { ensureMapView(); patchLiveChartRendering(); syncLight(); });
+    document.addEventListener("DOMContentLoaded", initOnce);
   } else {
-    ensureMapView();
-    patchLiveChartRendering();
-    syncLight();
+    initOnce();
   }
-  setInterval(syncLight, 3000);
+
+  setInterval(() => {
+    const liveView = document.getElementById("view-live");
+    if (liveView && !liveView.classList.contains("hidden")) {
+      drawLiveChartOnce();
+    }
+    const mapView = document.getElementById("view-map");
+    if (mapView && !mapView.classList.contains("hidden") && typeof window.rtRenderIsraelMap === "function") {
+      window.rtRenderIsraelMap();
+    }
+  }, 1000);
 })();
 </script>
 
