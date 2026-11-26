@@ -124,7 +124,9 @@ class MainActivity : AppCompatActivity() {
         }
         setContentView(webView)
 
+        sampleStore = SampleStore(this)
         telemetryEngine = ModemTelemetryEngine(this) { jsonPayload ->
+            try { sampleStore.addFromPayload(org.json.JSONObject(jsonPayload), lastLat, lastLon, lastAcc) } catch (_: Exception) {}
             val jsCall = "if (window.onRealModemData) { window.onRealModemData($jsonPayload); }"
             webView.evaluateJavascript(jsCall, null)
         }
@@ -440,6 +442,74 @@ class MainActivity : AppCompatActivity() {
             }.start()
         }
 
+        // ---- persistent RF sample store (every sample is kept until the user presses "clear") ----
+        @JavascriptInterface
+        fun getSampleCount(): Long = sampleStore.total()
+
+        @JavascriptInterface
+        fun getSamplesPage(beforeId: Long, limit: Int): String = sampleStore.page(beforeId, limit)
+
+        @JavascriptInterface
+        fun getSamplesSince(afterId: Long, limit: Int): String = sampleStore.since(afterId, limit)
+
+        @JavascriptInterface
+        fun getSamplesChunk(afterId: Long, limit: Int): String = sampleStore.chunkAsc(afterId, limit)
+
+        @JavascriptInterface
+        fun clearSamples() { sampleStore.clear() }
+
+        /** Streams ALL stored samples to Downloads as CSV or JSON; reports back via window.onExportDone. */
+        @JavascriptInterface
+        fun exportSamples(format: String) {
+            val json = format == "json"
+            Thread {
+                var name = ""
+                var rows = 0L
+                var err = ""
+                try {
+                    val stamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date())
+                    name = "cellular_rf_$stamp." + (if (json) "json" else "csv")
+                    val mime = if (json) "application/json" else "text/csv"
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        val values = ContentValues().apply {
+                            put(MediaStore.MediaColumns.DISPLAY_NAME, name)
+                            put(MediaStore.MediaColumns.MIME_TYPE, mime)
+                            put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+                        }
+                        val uri = contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                        if (uri == null) err = "לא ניתן ליצור קובץ" else
+                            contentResolver.openOutputStream(uri)?.use { rows = sampleStore.export(it, json) }
+                    } else {
+                        val dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                        File(dir, name).outputStream().use { rows = sampleStore.export(it, json) }
+                    }
+                } catch (e: Exception) {
+                    err = e.message ?: e.javaClass.simpleName
+                }
+                runOnUiThread {
+                    webView.evaluateJavascript(
+                        "window.onExportDone && window.onExportDone(${org.json.JSONObject.quote(name)}, $rows, ${org.json.JSONObject.quote(err)})", null
+                    )
+                }
+            }.start()
+        }
+
+        /** Opens the system print dialog for the current page ("Save as PDF"). */
+        @JavascriptInterface
+        fun printPage(title: String) {
+            runOnUiThread {
+                try {
+                    val pm = getSystemService(PRINT_SERVICE) as android.print.PrintManager
+                    val attrs = android.print.PrintAttributes.Builder()
+                        .setMediaSize(android.print.PrintAttributes.MediaSize.ISO_A4)
+                        .build()
+                    pm.print(title, webView.createPrintDocumentAdapter(title), attrs)
+                } catch (e: Exception) {
+                    Toast.makeText(this@MainActivity, "הדפסה נכשלה: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+
         @JavascriptInterface
         fun beep(count: Int) {
             playBeep(count)
@@ -491,6 +561,11 @@ class MainActivity : AppCompatActivity() {
         webView.evaluateJavascript("window.onAirplaneState && window.onAirplaneState($on)", null)
     }
 
+    private lateinit var sampleStore: SampleStore
+    private var lastLat: Double? = null
+    private var lastLon: Double? = null
+    private var lastAcc: Float? = null
+
     private var locationListener: android.location.LocationListener? = null
 
     @SuppressLint("MissingPermission")
@@ -500,6 +575,7 @@ class MainActivity : AppCompatActivity() {
         val lm = getSystemService(LOCATION_SERVICE) as android.location.LocationManager
         val listener = object : android.location.LocationListener {
             override fun onLocationChanged(loc: android.location.Location) {
+                lastLat = loc.latitude; lastLon = loc.longitude; lastAcc = loc.accuracy
                 webView.evaluateJavascript(
                     "window.onRealLocation && window.onRealLocation(${loc.latitude}, ${loc.longitude}, ${loc.accuracy})", null
                 )
@@ -555,7 +631,7 @@ class MainActivity : AppCompatActivity() {
     override fun onPause() {
         super.onPause()
         if (::webView.isInitialized) {
-            webView.evaluateJavascript("window.rtPersistFullStateNow && window.rtPersistFullStateNow()", null)
+            webView.evaluateJavascript("window.rtPersistFullStateNow && window.rtPersistFullStateNow(true)", null)
         }
     }
 

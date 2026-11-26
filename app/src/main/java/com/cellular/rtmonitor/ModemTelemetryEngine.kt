@@ -78,6 +78,13 @@ class ModemTelemetryEngine(
         if (v == CellInfo.UNAVAILABLE || v == Int.MAX_VALUE) put(key, JSONObject.NULL) else put(key, v)
     }
 
+    /** Current LTE signal as reported by the modem via SignalStrength (fills gaps in a CellInfo that lacks values). */
+    private fun liveLte(): CellSignalStrengthLte? = try {
+        telephonyManager.signalStrength?.cellSignalStrengths?.filterIsInstance<CellSignalStrengthLte>()?.firstOrNull()
+    } catch (_: Exception) { null }
+
+    private fun validDbm(v: Int) = v != CellInfo.UNAVAILABLE && v != Int.MAX_VALUE
+
     private fun isValidSinr(value: Int): Boolean {
         return value != CellInfo.UNAVAILABLE && value != Int.MAX_VALUE && value in -30..50
     }
@@ -300,8 +307,9 @@ class ModemTelemetryEngine(
                 obj.put("gnb", id.ci shr 8)
                 obj.put("arfcn", id.earfcn)
                 obj.put("tac", id.tac)
-                obj.putReported("rsrp", sig.rsrp)
-                obj.putReported("rsrq", sig.rsrq)
+                val live = if (info.isRegistered && !validDbm(sig.rsrp)) liveLte() else null
+                obj.putReported("rsrp", if (live != null) live.rsrp else sig.rsrp)
+                obj.putReported("rsrq", if (live != null && !validDbm(sig.rsrq)) live.rsrq else sig.rsrq)
                 if (resolvedSinr != null) {
                     obj.put("sinr", resolvedSinr)
                 } else {

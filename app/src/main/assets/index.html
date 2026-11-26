@@ -31,6 +31,36 @@
         ::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
         @keyframes pulse-fast { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
         .live-dot { animation: pulse-fast 1.2s infinite; }
+
+        /* ---------- advanced analysis + printable report ---------- */
+        .print-only { display: none; }
+        #an-result .an-card { background:#0f172a; border:1px solid #1e293b; border-radius:10px; padding:10px; }
+        #an-result h3 { font-size:12px; font-weight:700; color:#67e8f9; margin-bottom:6px; }
+        #an-result .an-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
+        #an-result .an-kpi { background:#0f172a; border:1px solid #1e293b; border-radius:8px; padding:6px 8px; }
+        #an-result .an-kpi-l { font-size:10px; color:#94a3b8; } #an-result .an-kpi-v { font-size:15px; font-weight:800; color:#e2e8f0; } #an-result .an-kpi-s { font-size:10px; color:#64748b; }
+        #an-result .an-two { display:grid; grid-template-columns:1fr; gap:8px; }
+        @media (min-width: 640px) { #an-result .an-two { grid-template-columns:1fr 1fr; } }
+        #an-result .an-concl { list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:5px; font-size:12px; color:#e2e8f0; line-height:1.5; }
+        #an-result .an-note { font-size:10px; color:#64748b; margin-top:4px; }
+        #an-result .an-table th { text-align:right; color:#94a3b8; font-weight:600; padding:3px 5px; border-bottom:1px solid #334155; white-space:nowrap; }
+        #an-result .an-table td { padding:3px 5px; border-bottom:1px solid #1e293b; color:#cbd5e1; white-space:nowrap; }
+        @media print {
+            @page { size: A4; margin: 12mm; }
+            body.rt-print-analyze { height:auto !important; overflow:visible !important; display:block !important; background:#fff !important; color:#111 !important; }
+            body.rt-print-analyze > *:not(#view-analyze) { display:none !important; }
+            body.rt-print-analyze #view-analyze { display:block !important; overflow:visible !important; padding:0 !important; background:#fff !important; }
+            body.rt-print-analyze .no-print, body.rt-print-analyze canvas.chart { display:none !important; }
+            body.rt-print-analyze .print-only { display:block !important; }
+            body.rt-print-analyze img.print-only { width:100%; height:auto; }
+            body.rt-print-analyze #an-result * { color:#111 !important; border-color:#d1d5db !important; }
+            body.rt-print-analyze #an-result .an-card, body.rt-print-analyze #an-result .an-kpi { background:#fff !important; border:1px solid #cbd5e1 !important; break-inside:avoid; margin-bottom:8px; }
+            body.rt-print-analyze #an-result h3 { color:#0e7490 !important; }
+            body.rt-print-analyze #an-result .an-print-head h1 { font-size:20px; font-weight:800; margin-bottom:2px; }
+            body.rt-print-analyze #an-result .an-two { grid-template-columns:1fr 1fr; }
+            body.rt-print-analyze #an-result .an-table td, body.rt-print-analyze #an-result .an-table th { white-space:normal; font-size:9px; }
+            body.rt-print-analyze #an-result tr { break-inside:avoid; }
+        }
     </style>
 </head>
 <body class="h-screen flex flex-col overflow-hidden select-none">
@@ -57,12 +87,13 @@
             </div>
         </div>
 
-        <nav class="grid grid-cols-5 gap-0.5 mt-1.5 bg-slate-950 p-0.5 rounded-lg border border-slate-800 text-[10px] font-bold">
-            <button onclick="switchTab('live')" id="tab-btn-live" class="tab-btn py-1 rounded-md bg-cyan-600 text-white transition">📡 נתונים חיים</button>
-            <button type="button" onclick="rtSwitchToMapTab()" id="tab-btn-map" class="tab-btn py-1 rounded-md text-slate-400 hover:text-white transition">🗺️ מפה</button>
-            <button onclick="switchTab('logs')" id="tab-btn-logs" class="tab-btn py-1 rounded-md text-slate-400 hover:text-white transition">📜 לוג וייצוא</button>
-            <button onclick="switchTab('analytics')" id="tab-btn-analytics" class="tab-btn py-1 rounded-md text-slate-400 hover:text-white transition">📊 ניתוח וגרפים</button>
-            <button onclick="switchTab('ai')" id="tab-btn-ai" class="tab-btn py-1 rounded-md text-slate-400 hover:text-white transition">🤖 ניתוח AI</button>
+        <nav class="grid grid-cols-6 gap-0.5 mt-1.5 bg-slate-950 p-0.5 rounded-lg border border-slate-800 text-[10px] font-bold">
+            <button onclick="switchTab('live')" id="tab-btn-live" class="tab-btn py-1 rounded-md bg-cyan-600 text-white transition leading-tight">📡<br>חי</button>
+            <button type="button" onclick="rtSwitchToMapTab()" id="tab-btn-map" class="tab-btn py-1 rounded-md text-slate-400 hover:text-white transition leading-tight">🗺️<br>מפה</button>
+            <button onclick="switchTab('logs')" id="tab-btn-logs" class="tab-btn py-1 rounded-md text-slate-400 hover:text-white transition leading-tight">📜<br>לוג</button>
+            <button onclick="switchTab('analytics')" id="tab-btn-analytics" class="tab-btn py-1 rounded-md text-slate-400 hover:text-white transition leading-tight">📊<br>גרפים</button>
+            <button onclick="switchTab('analyze')" id="tab-btn-analyze" class="tab-btn py-1 rounded-md text-slate-400 hover:text-white transition leading-tight">🔬<br>ניתוח CSV</button>
+            <button onclick="switchTab('ai')" id="tab-btn-ai" class="tab-btn py-1 rounded-md text-slate-400 hover:text-white transition leading-tight">🤖<br>AI</button>
         </nav>
     </header>
 
@@ -299,6 +330,23 @@
     <!-- ===================================================================== -->
     <!-- TAB 3: LOG ANALYTICS, CONCLUSIONS, CHARTS & HISTOGRAMS                -->
     <!-- ===================================================================== -->
+    <section id="view-analyze" class="tab-view hidden flex-1 flex flex-col p-2 gap-2 overflow-y-auto">
+        <div class="no-print bg-slate-900 border border-slate-800 rounded-lg p-2.5 space-y-2">
+            <div>
+                <h2 class="text-sm font-bold text-white">🔬 ניתוח מתקדם (אופליין)</h2>
+                <p class="text-[11px] text-slate-400">טען קובץ CSV שיוצא מהאפליקציה, או נתח את כל הדגימות השמורות במכשיר. הכול מחושב מקומית.</p>
+            </div>
+            <div class="flex flex-wrap gap-1.5">
+                <button type="button" onclick="rtAnalyze.pickFile()" class="px-3 py-1.5 rounded-lg bg-cyan-600 text-white text-xs font-bold">📂 טען קובץ CSV</button>
+                <button type="button" onclick="rtAnalyze.loadFromDevice()" class="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-bold">📱 נתח את כל דגימות המכשיר</button>
+                <button type="button" id="an-btn-pdf" disabled onclick="rtAnalyze.printReport()" class="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold opacity-40">📄 הפק דוח PDF</button>
+            </div>
+            <input type="file" id="an-file" accept=".csv,.txt,text/csv,text/plain" class="hidden">
+            <div id="an-status" class="text-[11px] text-slate-400">לא נטען קובץ.</div>
+        </div>
+        <div id="an-result" class="hidden space-y-2"></div>
+    </section>
+
     <section id="view-analytics" class="tab-view hidden flex-1 flex flex-col p-2.5 gap-2.5 overflow-y-auto">
         <div class="flex items-center justify-between bg-slate-900 border border-slate-800 rounded-lg p-2.5">
             <div>
@@ -675,25 +723,105 @@
             }
         }
 
+        /* ===================== RF sample store =====================
+           Every RF sample is kept (native SQLite on the device; in-memory only when running in a plain browser).
+           The ONLY way samples are deleted is the "נקה" button (clearLogs). */
+        const RfStore = {
+            COLS: ['id','ts','lat','lon','acc','rat','tech','band','plmn','pci','gnb','arfcn','tac','ta','rsrp','rsrq','sinr','rssi','tx','ho','nb'],
+            mem: [], lastAdd: 0,
+            isNative() { return !!(window.AndroidModem && window.AndroidModem.getSamplesPage); },
+            count() { return this.isNative() ? Number(window.AndroidModem.getSampleCount()) : this.mem.length; },
+            _parse(j) { try { return JSON.parse(j) || []; } catch (_e) { return []; } },
+            page(beforeId, limit) {
+                if (this.isNative()) return this._parse(window.AndroidModem.getSamplesPage(beforeId || 0, limit));
+                const src = beforeId ? this.mem.filter(r => r[0] < beforeId) : this.mem;
+                return src.slice(-limit).reverse();
+            },
+            since(afterId, limit) {
+                if (this.isNative()) return this._parse(window.AndroidModem.getSamplesSince(afterId || 0, limit));
+                return this.mem.filter(r => r[0] > afterId).slice(-limit).reverse();
+            },
+            chunkAsc(afterId, limit) {
+                if (this.isNative()) return this._parse(window.AndroidModem.getSamplesChunk(afterId || 0, limit));
+                return this.mem.filter(r => r[0] > afterId).slice(0, limit);
+            },
+            clear() { if (this.isNative()) window.AndroidModem.clearSamples(); this.mem = []; },
+            // browser fallback only (on the device Kotlin stores samples itself)
+            addFallback() {
+                const now = Date.now();
+                if (this.isNative() || now - this.lastAdd < 900) return;
+                this.lastAdd = now;
+                const sc = state.servingCell, rf = state.rf, loc = window.rtLastLocation || {};
+                const n = (v) => (typeof v === 'number' ? v : null);
+                this.mem.push([(this.mem.length ? this.mem[this.mem.length - 1][0] : 0) + 1, now,
+                    n(loc.lat), n(loc.lon), n(loc.acc), state.activeRat, sc.tech, sc.band, sc.plmn,
+                    n(sc.pci), n(sc.gnb), n(sc.arfcn), n(sc.tac), n(sc.ta), rf.rsrp, rf.rsrq, rf.sinr, rf.rssi, rf.txPower, 0, state.neighbors.length]);
+            },
+            obj(r) { const o = {}; this.COLS.forEach((c, i) => { o[c] = r[i]; }); return o; }
+        };
+        window.RfStore = RfStore;
+
         function addLog(category, direction, title, summary) {
             const now = new Date();
             const ts = now.toTimeString().split(' ')[0];
-            state.logs.unshift({ id: Date.now() + Math.random(), timestamp: ts, category, direction, title, summary });
-            if (state.logs.length > 1000) state.logs.pop();
+            state.logs.unshift({ id: Date.now() + Math.random(), ts: now.getTime(), timestamp: ts, category, direction, title, summary });
+            if (state.logs.length > 5000) state.logs.pop();
             if (!document.getElementById('view-logs').classList.contains('hidden')) {
-                renderLogs();
-            } else {
-                updateRfDiag();
+                if ((state.logFilter || 'ALL') !== 'RF') renderLogs();
             }
         }
 
+        const _esc = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const _fmt = (v, d, u) => (typeof v === 'number' ? v.toFixed(d) + u : '--');
+        const _pad = (n) => String(n).padStart(2, '0');
+        function fmtDateTime(ts) {
+            const d = new Date(ts);
+            return `${_pad(d.getDate())}/${_pad(d.getMonth() + 1)} ${_pad(d.getHours())}:${_pad(d.getMinutes())}:${_pad(d.getSeconds())}`;
+        }
+        const BADGES = {
+            HO: 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40',
+            RF: 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30',
+            SYS: 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+        };
+        function eventCardHtml(log) {
+            return `<div class="bg-slate-900/90 border border-slate-800 rounded p-2 text-slate-200 space-y-1">
+                <div class="flex items-center justify-between gap-2 text-[11px]">
+                    <span class="px-1.5 py-0.5 rounded font-bold ${BADGES[log.category] || BADGES.SYS}">${_esc(log.category || 'SYS')}</span>
+                    <span class="text-slate-400">${_esc(log.direction || '')}</span>
+                    <span class="text-slate-500 font-mono">${_esc(log.ts ? fmtDateTime(log.ts) : (log.timestamp || ''))}</span>
+                </div>
+                <div class="font-semibold text-cyan-200 break-all">${_esc(log.title || '')}</div>
+                <div class="text-slate-300 break-all">${_esc(log.summary || '')}</div>
+            </div>`;
+        }
+        function rfCardHtml(r) {
+            const o = RfStore.obj(r);
+            const cell = (o.gnb != null ? 'eNB/gNB ' + o.gnb : '') + (o.pci != null ? ' · PCI ' + o.pci : '');
+            const where = (o.lat != null && o.lon != null)
+                ? `📍 ${o.lat.toFixed(5)}, ${o.lon.toFixed(5)}${o.acc != null ? ' · ±' + Math.round(o.acc) + 'מ׳' : ''}` : '📍 אין מיקום';
+            return `<div class="bg-slate-900/90 border border-slate-800 rounded p-2 text-slate-200 space-y-0.5">
+                <div class="flex items-center justify-between gap-2 text-[11px]">
+                    <span class="px-1.5 py-0.5 rounded font-bold ${o.ho ? BADGES.HO : BADGES.RF}">${o.ho ? 'RF·HO' : 'RF'}</span>
+                    <span class="text-slate-400">#${o.id}</span>
+                    <span class="text-slate-500 font-mono">${fmtDateTime(o.ts)}</span>
+                </div>
+                <div class="font-semibold text-cyan-200 break-all">${_esc(o.tech || o.rat || '')} · ${_esc(o.band || '')} · ${_esc(cell)}</div>
+                <div class="text-slate-300 break-all">RSRP: ${_fmt(o.rsrp,1,' dBm')} | RSRQ: ${_fmt(o.rsrq,1,' dB')} | SINR: ${_fmt(o.sinr,1,' dB')} | RSSI: ${_fmt(o.rssi,1,' dBm')}${o.tx != null ? ' | Tx: ' + o.tx.toFixed(0) + ' dBm' : ''}</div>
+                <div class="text-slate-500 text-[10px]">${where}${o.ta != null ? ' · TA ' + o.ta : ''}${o.plmn ? ' · ' + _esc(o.plmn) : ''}</div>
+            </div>`;
+        }
+
         function updateRfDiag() {
-            const logsArr = Array.isArray(state.logs) ? state.logs : [];
-            const rfLogs = logsArr.filter(l => l.category === 'RF');
+            const total = RfStore.count();
+            const nonRf = Array.isArray(state.logs) ? state.logs.length : 0;
             const c = document.getElementById('rt-rf-diag-counts');
-            if (c) c.textContent = `RF Logs: ${rfLogs.length} | Total: ${logsArr.length} | Filter: ${state.logFilter || 'ALL'}`;
+            const fil = state.importedSamples !== null ? 'FILE' : (state.logFilter || 'ALL');
+            if (c) c.textContent = `RF Samples: ${total.toLocaleString()} | Events: ${nonRf} | Filter: ${fil}`;
             const last = document.getElementById('rt-rf-diag-last');
-            if (last) last.textContent = rfLogs.length ? `Last RF: ${rfLogs[0].timestamp} ${rfLogs[0].title}` : 'Last RF: waiting...';
+            if (last) {
+                const r = total ? RfStore.page(0, 1)[0] : null;
+                last.textContent = r ? `Last RF: ${fmtDateTime(r[1])} ${r[6] || ''} PCI:${r[9] ?? '--'}` : 'Last RF: waiting...';
+            }
         }
 
         function setLogFilter(filter) {
@@ -705,43 +833,94 @@
             renderLogs();
         }
 
+        /* ---- RF stream: newest first, older pages loaded on scroll, new rows prepended every second ---- */
+        const rfv = { newest: 0, oldest: 0, loading: false, done: false, bound: false };
+        const RF_PAGE = 200;
+        function rfStreamReset(container) {
+            rfv.newest = 0; rfv.oldest = 0; rfv.done = false; rfv.loading = false;
+            container.innerHTML = '';
+            rfStreamMore(container);
+            if (!rfv.bound) {
+                rfv.bound = true;
+                container.addEventListener('scroll', () => {
+                    if ((state.logFilter || 'ALL') !== 'RF' || state.importedSamples !== null) return;
+                    if (container.scrollTop + container.clientHeight >= container.scrollHeight - 300) rfStreamMore(container);
+                });
+            }
+        }
+        function rfStreamMore(container) {
+            if (rfv.loading || rfv.done) return;
+            rfv.loading = true;
+            const rows = RfStore.page(rfv.oldest, RF_PAGE);
+            if (rows.length === 0) {
+                rfv.done = true;
+                if (!container.children.length) container.innerHTML = '<div class="text-slate-500 text-center py-6">עדיין אין דגימות RF.</div>';
+            } else {
+                if (!rfv.newest) rfv.newest = rows[0][0];
+                rfv.oldest = rows[rows.length - 1][0];
+                container.insertAdjacentHTML('beforeend', rows.map(rfCardHtml).join(''));
+                if (rows.length < RF_PAGE) rfv.done = true;
+            }
+            rfv.loading = false;
+        }
+        function rfStreamRefreshTop() {
+            const container = document.getElementById('log-stream');
+            if (!container || !rfv.newest && RfStore.count() === 0) return;
+            if (!rfv.newest) { rfStreamReset(container); return; }
+            const rows = RfStore.since(rfv.newest, RF_PAGE);
+            if (!rows.length) return;
+            rfv.newest = rows[0][0];
+            const keepScroll = container.scrollTop > 40;
+            const before = container.scrollHeight;
+            container.insertAdjacentHTML('afterbegin', rows.map(rfCardHtml).join(''));
+            if (keepScroll) container.scrollTop += container.scrollHeight - before;
+        }
+
         function renderLogs() {
             const container = document.getElementById('log-stream');
             if (!container) return;
-            const logsArr = Array.isArray(state.logs) ? state.logs : [];
-            const activeFilter = state.logFilter || 'ALL';
-            const filtered = logsArr.filter(l => activeFilter === 'ALL' || l.category === activeFilter);
+            const filter = state.logFilter || 'ALL';
             updateRfDiag();
-            if (filtered.length === 0) {
-                container.innerHTML = '<div class="text-slate-500 text-center py-6">אין רשומות להצגה בקטגוריה זו.</div>';
+
+            if (state.importedSamples !== null) {           // imported file: in-memory preview only
+                const arr = (state.fileLogs || []).filter(l => filter === 'ALL' || l.category === filter);
+                container.innerHTML = arr.length ? arr.map(eventCardHtml).join('') : '<div class="text-slate-500 text-center py-6">אין רשומות להצגה בקטגוריה זו.</div>';
                 return;
             }
-            const esc = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-            container.innerHTML = filtered.map(log => {
-                const badge = log.category === 'HO'
-                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
-                    : (log.category === 'RF' ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30');
-                return `
-                    <div class="bg-slate-900/90 border border-slate-800 rounded p-2 text-slate-200 space-y-1">
-                        <div class="flex items-center justify-between gap-2 text-[11px]">
-                            <span class="px-1.5 py-0.5 rounded font-bold ${badge}">${esc(log.category || 'SYS')}</span>
-                            <span class="text-slate-400">${esc(log.direction || '')}</span>
-                            <span class="text-slate-500 font-mono">${esc(log.timestamp || '')}</span>
-                        </div>
-                        <div class="font-semibold text-cyan-200 break-all">${esc(log.title || '')}</div>
-                        <div class="text-slate-300 break-all">${esc(log.summary || '')}</div>
-                    </div>
-                `;
-            }).join('');
+            if (filter === 'RF') { rfStreamReset(container); return; }
+
+            let items = (Array.isArray(state.logs) ? state.logs : []).filter(l => filter === 'ALL' || l.category === filter)
+                .map(l => ({ ts: l.ts || 0, html: null, log: l }));
+            if (filter === 'ALL') {                          // events + the newest RF samples, interleaved by time
+                RfStore.page(0, 150).forEach(r => items.push({ ts: r[1], html: rfCardHtml(r) }));
+                items.sort((a, b) => b.ts - a.ts);
+            }
+            container.innerHTML = items.length
+                ? items.map(i => i.html || eventCardHtml(i.log)).join('')
+                : '<div class="text-slate-500 text-center py-6">אין רשומות להצגה בקטגוריה זו.</div>';
         }
 
         function clearLogs() {
+            if (!confirm('למחוק את כל דגימות ה-RF והלוג? הפעולה אינה ניתנת לביטול.')) return;
             state.logs = [];
+            state.fileLogs = [];
             state.liveSamples = [];
+            state.history = [];
             state.sampleCount = 0;
+            RfStore.clear();
+            rfv.newest = 0; rfv.oldest = 0; rfv.done = false;
+            try { if (window.rtPersistFullStateNow) window.rtPersistFullStateNow(); } catch (_e) {}
             renderLogs();
             updateLiveUI();
+            showToast('נוקה', 'כל הדגימות והלוג נמחקו');
         }
+
+        setInterval(() => {
+            const v = document.getElementById('view-logs');
+            if (!v || v.classList.contains('hidden')) return;
+            updateRfDiag();
+            if (state.importedSamples === null && (state.logFilter || 'ALL') === 'RF') rfStreamRefreshTop();
+        }, 1000);
 
         window.onRealModemData = function(data) {
             try {
@@ -764,6 +943,7 @@
                 if (statusTxt) statusTxt.textContent = 'REAL MODEM';
 
                 const sc = (data.servingCell && typeof data.servingCell === 'object') ? data.servingCell : data;
+                let hasSignal = true;
                 if (sc && typeof sc === 'object') {
                     if (sc.handoverOccurred) {
                         state.hoCount = (state.hoCount || 0) + 1;
@@ -823,18 +1003,27 @@
                     const rssiN = toNum(sc.rssi ?? data.rssi);
 
                     const inRange = (n, lo, hi) => (n !== null && n > lo && n < hi) ? n : null;
-                    state.rf.rsrp = inRange(rsrpN, -200, 0);
-                    state.rf.rsrq = inRange(rsrqN, -50, 5);
-                    state.rf.sinr = inRange(sinrN, -40, 60);
-                    state.rf.rssi = inRange(rssiN, -150, 0);
-                    state.rf.txPower = inRange(toNum(sc.txPower ?? data.txPower), -60, 40);
+                    const nRsrp = inRange(rsrpN, -200, 0), nRsrq = inRange(rsrqN, -50, 5),
+                          nSinr = inRange(sinrN, -40, 60), nRssi = inRange(rssiN, -150, 0);
+                    // A payload with no signal value at all is an empty read (not a modem report): keep the last
+                    // values and do not store it. Partial reports (e.g. no SINR) are shown exactly as reported.
+                    hasSignal = [nRsrp, nRsrq, nSinr, nRssi].some(v => v !== null);
+                    if (hasSignal) {
+                        state.rf.rsrp = nRsrp; state.rf.rsrq = nRsrq; state.rf.sinr = nSinr; state.rf.rssi = nRssi;
+                        state.rf.txPower = inRange(toNum(sc.txPower ?? data.txPower), -60, 40);
+                    }
                 }
 
                 if (Array.isArray(data.neighbors)) {
                     state.neighbors = data.neighbors;
                 }
 
-                state.sampleCount = (state.sampleCount || 0) + 1;
+                if (!hasSignal) {
+                    if (typeof updateLiveUI === 'function') updateLiveUI();
+                    return;
+                }
+                RfStore.addFallback();
+                state.sampleCount = RfStore.count();
 
                 state.history = Array.isArray(state.history) ? state.history : [];
                 state.history.push({
@@ -865,16 +1054,6 @@
                     tx_power: state.rf.txPower
                 });
                 if (state.liveSamples.length > 500) state.liveSamples.shift();
-
-                const nowMs = Date.now();
-                if (nowMs - (state._lastRfLogTs || 0) >= 900) {
-                    state._lastRfLogTs = nowMs;
-                    const f1 = (v, u) => (typeof v === 'number' ? v.toFixed(1) + ' ' + u : '--');
-                    const scx = state.servingCell;
-                    addLog('RF', 'MODEM',
-                        `${scx.tech !== '---' ? scx.tech : state.activeRat} PCI:${scx.pci !== '---' ? scx.pci : '--'} | ${scx.band || '---'}`,
-                        `RSRP: ${f1(state.rf.rsrp, 'dBm')} | RSRQ: ${f1(state.rf.rsrq, 'dB')} | SINR: ${f1(state.rf.sinr, 'dB')} | RSSI: ${f1(state.rf.rssi, 'dBm')}`);
-                }
 
                 if (typeof window.rtMapLinkUpdate === 'function') { try { window.rtMapLinkUpdate(); } catch (_e) {} }
                 if (typeof updateLiveUI === 'function') updateLiveUI();
@@ -1023,7 +1202,32 @@
             requestAnimationFrame(renderLiveChart);
         }
 
+        window.onExportDone = function (name, rows, err) {
+            if (err) showToast('הייצוא נכשל', err, 'warn');
+            else showToast('הקובץ נשמר בהצלחה', `${rows.toLocaleString()} דגימות · Downloads/${name}`);
+        };
+        function exportAllFromStore(format) {
+            const total = RfStore.count();
+            if (total === 0) { showToast('אין נתונים לייצוא', 'עדיין לא נאספו דגימות.', 'warn'); return; }
+            if (RfStore.isNative()) {
+                showToast('מייצא...', `${total.toLocaleString()} דגימות`);
+                window.AndroidModem.exportSamples(format);
+                return;
+            }
+            const rows = []; let after = 0;
+            for (;;) { const ch = RfStore.chunkAsc(after, 5000); if (!ch.length) break; rows.push(...ch); after = ch[ch.length - 1][0]; }
+            const csvq = (v) => (v == null ? '' : /[",\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : v);
+            const content = format === 'json'
+                ? JSON.stringify({ exportedAt: new Date().toISOString(), samples: rows.map(r => RfStore.obj(r)) })
+                : ['timestamp,epoch_ms,lat,lon,gps_acc_m,rat,tech,band,plmn,pci,gnb,arfcn,tac,ta,rsrp,rsrq,sinr,rssi,tx_power,handover,neighbors']
+                    .concat(rows.map(r => [new Date(r[1]).toISOString(), r[1], ...r.slice(2).map(csvq)].join(','))).join('\n');
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(new Blob([content], { type: 'text/plain;charset=utf-8' }));
+            a.download = `cellular_rf_${Date.now()}.${format === 'json' ? 'json' : 'csv'}`;
+            a.click();
+        }
         function exportLogs(format) {
+            if (state.importedSamples === null) { exportAllFromStore(format); return; }
             const samples = getActiveSamples();
             if (samples.length === 0) {
                 showToast('אין נתונים לייצוא', 'המתן לקבלת דגימות מהמודם או טען קובץ.', 'warn');
@@ -1100,7 +1304,7 @@
                     document.getElementById('active-dataset-label').textContent = `קובץ מיובא: ${file.name} (${parsedSamples.length} רשומות)`;
                     document.getElementById('btn-reset-live').classList.remove('hidden');
 
-                    state.logs = parsedSamples.slice(-200).reverse().map((s, idx) => ({
+                    state.fileLogs = parsedSamples.slice(-2000).reverse().map((s, idx) => ({
                         id: idx,
                         timestamp: (s.timestamp || '').split('T').pop().replace('Z', ''),
                         category: 'RF',
@@ -1120,6 +1324,8 @@
         function resetToLiveDataset() {
             state.importedSamples = null;
             state.importedFileName = null;
+            state.fileLogs = [];
+            renderLogs();
             document.getElementById('active-dataset-label').textContent = 'הקלטה חיה מהמכשיר';
             document.getElementById('btn-reset-live').classList.add('hidden');
             showToast('חזרה לנתונים חיים', 'הניתוח והלוג מציגים כעת את נתוני המכשיר בזמן אמת.');
@@ -1511,10 +1717,12 @@ if (window.__rtStableV41) return;
       const mb = document.getElementById("tab-btn-map");
       if (mb) mb.className = "tab-btn py-1 rounded-md bg-cyan-600 text-white transition";
       if (window.rtMap) window.rtMap.onShow();
+      if (window.rtAnalyze) window.rtAnalyze.onHide();
       return;
     }
     if (mv) mv.classList.add("hidden");
     if (typeof baseSwitchTab === "function") baseSwitchTab(tabName);
+    if (window.rtAnalyze) { if (tabName === "analyze") window.rtAnalyze.onShow(); else window.rtAnalyze.onHide(); }
   };
 
   // Feed live chart from state.history / state.liveSamples and draw once per second while #view-live is open
@@ -1646,6 +1854,7 @@ if (window.__rtStableV41) return;
 <script src="vendor/leaflet.js"></script>
 <script src="antennas.js"></script>
 <script src="rt-map.js"></script>
+<script src="rt-analyze.js"></script>
 <script id="rt-persist-exit">
 /* Persistence + clean exit (single, idempotent block) */
 (function () {
@@ -1653,16 +1862,19 @@ if (window.__rtStableV41) return;
   window.__rtPersistExit = true;
   var bridge = function () { return window.AndroidModem || null; };
 
-  window.rtPersistFullStateNow = function () {
+  var lastSig = "";
+  window.rtPersistFullStateNow = function (force) {
     try {
       var b = bridge();
       if (!b || typeof b.saveStateToDevice !== "function") return false;
       var st = window.state;
+      // RF samples are stored natively and immediately; only events + counters go here
+      var sig = st.logs.length + ":" + (st.logs[0] ? st.logs[0].id : "") + ":" + st.hoCount;
+      if (force !== true && sig === lastSig) return true;
+      lastSig = sig;
       b.saveStateToDevice(JSON.stringify({
         savedAt: new Date().toISOString(),
-        logs: st.logs.slice(0, 500),
-        liveSamples: st.liveSamples,
-        sampleCount: st.sampleCount,
+        logs: st.logs.filter(function (l) { return l.category !== "RF"; }).slice(0, 5000),
         hoCount: st.hoCount
       }));
       return true;
@@ -1671,16 +1883,28 @@ if (window.__rtStableV41) return;
 
   function restore() {
     try {
+      var st = window.state;
       var b = bridge();
       if (b && typeof b.getAirplaneMode === "function" && window.onAirplaneState) window.onAirplaneState(b.getAirplaneMode());
-      if (!b || typeof b.loadStateFromDevice !== "function") return;
-      var raw = b.loadStateFromDevice();
-      if (!raw) return;
-      var d = JSON.parse(raw), st = window.state;
-      if (Array.isArray(d.logs) && !st.logs.length) st.logs = d.logs;
-      if (Array.isArray(d.liveSamples) && !st.liveSamples.length) st.liveSamples = d.liveSamples;
-      st.sampleCount = Math.max(st.sampleCount || 0, d.sampleCount || 0);
-      st.hoCount = Math.max(st.hoCount || 0, d.hoCount || 0);
+      if (b && typeof b.loadStateFromDevice === "function") {
+        var raw = b.loadStateFromDevice();
+        if (raw) {
+          var d = JSON.parse(raw);
+          if (Array.isArray(d.logs) && !st.logs.length) st.logs = d.logs.filter(function (l) { return l.category !== "RF"; });
+          st.hoCount = Math.max(st.hoCount || 0, d.hoCount || 0);
+        }
+      }
+      // load everything that already exists: total count + recent samples for the live chart
+      st.sampleCount = RfStore.count();
+      var recent = RfStore.page(0, 500).reverse();
+      if (recent.length && !st.liveSamples.length) {
+        st.liveSamples = recent.map(function (r) {
+          var o = RfStore.obj(r);
+          return { timestamp: new Date(o.ts).toISOString(), rat: o.rat, tech: o.tech, band: o.band, plmn: o.plmn,
+            cell_id: o.pci, gnb: o.gnb, arfcn: o.arfcn, tac: o.tac, rsrp: o.rsrp, rsrq: o.rsrq, sinr: o.sinr, rssi: o.rssi, tx_power: o.tx };
+        });
+        st.history = recent.slice(-90).map(function (r) { return { rsrp: r[14], rssi: r[17], sinr: r[16], ts: r[1] }; });
+      }
       renderLogs();
       if (typeof updateLiveUI === "function") updateLiveUI();
     } catch (e) {}
@@ -1688,17 +1912,17 @@ if (window.__rtStableV41) return;
 
   window.rtTriggerCleanExit = function () {
     try { addLog("SYS", "EXIT", "נתונים נשמרו, סוגר אפליקציה"); } catch (e) {}
-    window.rtPersistFullStateNow();
+    window.rtPersistFullStateNow(true);
     var b = bridge();
     if (b && typeof b.exitApp === "function") { b.exitApp(); return; }
     try { window.close(); } catch (e) {}
   };
 
-  setInterval(window.rtPersistFullStateNow, 15000);
+  setInterval(function () { window.rtPersistFullStateNow(); }, 15000);
   document.addEventListener("visibilitychange", function () {
-    if (document.visibilityState === "hidden") window.rtPersistFullStateNow();
+    if (document.visibilityState === "hidden") window.rtPersistFullStateNow(true);
   });
-  window.addEventListener("pagehide", window.rtPersistFullStateNow);
+  window.addEventListener("pagehide", function () { window.rtPersistFullStateNow(true); });
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", restore);
   else restore();
 })();
