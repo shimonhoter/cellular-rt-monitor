@@ -36,7 +36,7 @@ class SampleStore(context: Context) :
     @Volatile private var lastInsertTs = 0L
 
     init {
-        enableWriteAheadLogging()
+        setWriteAheadLoggingEnabled(true)
         writer.execute { count.set(queryCount()) }
     }
 
