@@ -277,6 +277,8 @@
             <button type="button" id="rt-map-auto" class="px-2 py-1 rounded font-bold bg-slate-800 text-slate-300 border border-slate-700">מירכוז אוטומטי: כבוי</button>
             <button type="button" id="rt-map-center-now" class="px-2 py-1 rounded font-bold bg-cyan-600 text-white">🎯 מרכז עליי</button>
             <label class="flex items-center gap-1 text-slate-300"><input type="checkbox" id="rt-map-show-ant" checked> תחנות</label>
+            <label class="flex items-center gap-1 text-slate-300" title="הצג רק תחנות שיש להן נתוני קליטה מהמודם"><input type="checkbox" id="rt-map-only-assoc"> עם נתוני קליטה</label>
+            <button type="button" id="rt-map-explain" class="px-1.5 py-1 rounded bg-slate-800 text-cyan-300 border border-slate-700 font-bold" title="איך מחושב השיוך לתחנה">ℹ️</button>
             <select id="rt-map-company" class="bg-slate-800 text-slate-200 border border-slate-700 rounded px-1 py-0.5">
                 <option value="">כל הרשתות</option>
             </select>
@@ -792,10 +794,35 @@
                 this.mem.push([(this.mem.length ? this.mem[this.mem.length - 1][0] : 0) + 1, now,
                     n(loc.lat), n(loc.lon), n(loc.acc), state.activeRat, e(sc.tech), e(sc.band), e(sc.plmn),
                     n(sc.pci), n(sc.gnb), n(sc.arfcn), n(sc.tac), n(sc.ta), rf.rsrp, rf.rsrq, rf.sinr, rf.rssi, rf.txPower, 0, state.neighbors.length]);
+                CellObs.add({ ts: now, lat: n(loc.lat), lon: n(loc.lon), tech: e(sc.tech), band: e(sc.band), plmn: e(sc.plmn), pci: n(sc.pci), gnb: n(sc.gnb), arfcn: n(sc.arfcn), ta: n(sc.ta), rsrp: rf.rsrp, rsrq: rf.rsrq, sinr: rf.sinr, rssi: rf.rssi });
             },
             obj(r) { const o = {}; this.COLS.forEach((c, i) => { o[c] = r[i]; }); return o; }
         };
         window.RfStore = RfStore;
+
+        /* Permanent per-cell/per-place observations (browser fallback; on the device Kotlin keeps them in SQLite and never clears them) */
+        const CellObs = {
+            map: {}, loaded: false,
+            _load() { if (this.loaded) return; this.loaded = true; try { this.map = JSON.parse(localStorage.getItem('rt_cellobs_v1') || '{}') || {}; } catch (_e) { this.map = {}; } },
+            add(s) {
+                this._load();
+                if (s.lat == null || s.lon == null || s.rsrp == null) return;
+                const m = /(\d{3})-?(\d{2,3})/.exec(String(s.plmn || ''));
+                const plmn = m ? m[1] + '-' + m[2] : '';
+                const gx = Math.round(s.lat / 0.0002), gy = Math.round(s.lon / 0.0002);
+                const nn = (v) => (typeof v === 'number' ? v : -1);
+                const key = [s.tech, plmn, nn(s.gnb), nn(s.pci), nn(s.arfcn), gx, gy].join('|');
+                let r = this.map[key];
+                const q = (v) => (typeof v === 'number' ? [v, 1] : [0, 0]);
+                const rq = q(s.rsrq), sn = q(s.sinr), rs = q(s.rssi), ta = q(s.ta);
+                if (!r) r = this.map[key] = [s.tech || '', plmn, nn(s.gnb), nn(s.pci), nn(s.arfcn), s.band || '', gx, gy, 0, 0, 0, 0, s.rsrp, s.rsrp, 0, 0, 0, 0, 0, 0, 0, 0, s.ts, s.ts];
+                r[8]++; r[9] += s.lat; r[10] += s.lon; r[11] += s.rsrp; r[12] = Math.max(r[12], s.rsrp); r[13] = Math.min(r[13], s.rsrp);
+                r[14] += rq[0]; r[15] += rq[1]; r[16] += sn[0]; r[17] += sn[1]; r[18] += rs[0]; r[19] += rs[1]; r[20] += ta[0]; r[21] += ta[1]; r[23] = s.ts;
+                if ((r[8] % 5) === 0) { try { localStorage.setItem('rt_cellobs_v1', JSON.stringify(this.map)); } catch (_e) {} }
+            },
+            rows() { this._load(); return Object.keys(this.map).map(k => this.map[k]); }
+        };
+        window.CellObs = CellObs;
 
         function addLog(category, direction, title, summary) {
             const now = new Date();
@@ -1885,6 +1912,7 @@ if (window.__rtStableV41) return;
 
 <script src="vendor/leaflet.js"></script>
 <script src="antennas.js"></script>
+<script src="rt-assoc.js"></script>
 <script src="rt-map.js"></script>
 <script src="rt-analyze.js"></script>
 <script id="rt-persist-exit">

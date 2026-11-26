@@ -473,6 +473,10 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun clearSamples() { sampleStore.clear() }
 
+        /** Permanent per-cell observation aggregates used to link modem data to physical stations. Never cleared. */
+        @JavascriptInterface
+        fun getCellObs(): String = sampleStore.cellObs()
+
         /** Streams ALL stored samples to Downloads as CSV or JSON; reports back via window.onExportDone. */
         @JavascriptInterface
         fun exportSamples(format: String) {

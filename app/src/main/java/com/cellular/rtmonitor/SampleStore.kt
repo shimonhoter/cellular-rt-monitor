@@ -20,7 +20,7 @@ import java.util.concurrent.atomic.AtomicLong
  * Only [clear] ever deletes data.
  */
 class SampleStore(context: Context) :
-    SQLiteOpenHelper(context.applicationContext, "rf_samples.db", null, 1) {
+    SQLiteOpenHelper(context.applicationContext, "rf_samples.db", null, 2) {
 
     companion object {
         /** Column order used for rows sent to JS and for CSV export. */
@@ -29,6 +29,26 @@ class SampleStore(context: Context) :
             "tac", "ta", "rsrp", "rsrq", "sinr", "rssi", "tx", "ho", "nb"
         )
         private const val MIN_INTERVAL_MS = 900L
+        /** ~22 m grid used to aggregate observations per cell per place. */
+        private const val GRID_DEG = 0.0002
+
+        /** Column order of rows returned by [cellObs]. */
+        val OBS_COLS = listOf(
+            "tech", "plmn", "gnb", "pci", "arfcn", "band", "gx", "gy", "n", "sumLat", "sumLon", "sumRsrp", "maxRsrp", "minRsrp",
+            "sumRsrq", "nRsrq", "sumSinr", "nSinr", "sumRssi", "nRssi", "sumTa", "nTa", "firstTs", "lastTs"
+        )
+
+        private const val CREATE_OBS = """CREATE TABLE IF NOT EXISTS cell_obs(
+                tech TEXT NOT NULL, plmn TEXT NOT NULL, gnb INTEGER NOT NULL, pci INTEGER NOT NULL, arfcn INTEGER NOT NULL,
+                band TEXT, gx INTEGER NOT NULL, gy INTEGER NOT NULL,
+                n INTEGER NOT NULL, sumLat REAL NOT NULL, sumLon REAL NOT NULL,
+                sumRsrp REAL NOT NULL, maxRsrp REAL NOT NULL, minRsrp REAL NOT NULL,
+                sumRsrq REAL NOT NULL DEFAULT 0, nRsrq INTEGER NOT NULL DEFAULT 0,
+                sumSinr REAL NOT NULL DEFAULT 0, nSinr INTEGER NOT NULL DEFAULT 0,
+                sumRssi REAL NOT NULL DEFAULT 0, nRssi INTEGER NOT NULL DEFAULT 0,
+                sumTa REAL NOT NULL DEFAULT 0, nTa INTEGER NOT NULL DEFAULT 0,
+                firstTs INTEGER NOT NULL, lastTs INTEGER NOT NULL,
+                PRIMARY KEY (tech, plmn, gnb, pci, arfcn, gx, gy))"""
     }
 
     private val writer = Executors.newSingleThreadExecutor()
@@ -50,9 +70,28 @@ class SampleStore(context: Context) :
                 rsrp REAL, rsrq REAL, sinr REAL, rssi REAL, tx REAL, ho INTEGER, nb INTEGER)"""
         )
         db.execSQL("CREATE INDEX idx_samples_ts ON samples(ts)")
+        db.execSQL(CREATE_OBS)
     }
 
-    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {}
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        if (oldVersion < 2) {
+            db.execSQL(CREATE_OBS)
+            // build the permanent observation table from samples recorded before this version
+            try {
+                db.execSQL(
+                    """INSERT OR IGNORE INTO cell_obs(tech,plmn,gnb,pci,arfcn,band,gx,gy,n,sumLat,sumLon,sumRsrp,maxRsrp,minRsrp,
+                         sumRsrq,nRsrq,sumSinr,nSinr,sumRssi,nRssi,sumTa,nTa,firstTs,lastTs)
+                       SELECT IFNULL(tech,''), substr(IFNULL(plmn,''),1,6), IFNULL(gnb,-1), IFNULL(pci,-1), IFNULL(arfcn,-1), MAX(band),
+                         CAST(ROUND(lat/$GRID_DEG) AS INTEGER), CAST(ROUND(lon/$GRID_DEG) AS INTEGER),
+                         COUNT(*), SUM(lat), SUM(lon), SUM(rsrp), MAX(rsrp), MIN(rsrp),
+                         IFNULL(SUM(rsrq),0), COUNT(rsrq), IFNULL(SUM(sinr),0), COUNT(sinr), IFNULL(SUM(rssi),0), COUNT(rssi),
+                         IFNULL(SUM(ta),0), COUNT(ta), MIN(ts), MAX(ts)
+                       FROM samples WHERE lat IS NOT NULL AND lon IS NOT NULL AND rsrp IS NOT NULL
+                       GROUP BY 1,2,3,4,5,7,8"""
+                )
+            } catch (_: Exception) {}
+        }
+    }
 
     private fun queryCount(): Long = try {
         readableDatabase.rawQuery("SELECT COUNT(*) FROM samples", null).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
@@ -98,12 +137,68 @@ class SampleStore(context: Context) :
             num(sc, "txPower")?.let { put("tx", it) }
             put("ho", if (ho) 1 else 0); put("nb", nb)
         }
+        val plmnNum = Regex("(\\d{3})-?(\\d{2,3})").find(payload.optString("plmn"))?.let { "${it.groupValues[1]}-${it.groupValues[2]}" } ?: ""
+        val tsNow = now
         writer.execute {
             try {
                 writableDatabase.insert("samples", null, cv)
                 count.incrementAndGet()
             } catch (_: Exception) {}
+            // permanent per-cell / per-place aggregate (never deleted by "clear")
+            if (lat != null && lon != null && rsrp != null) {
+                try {
+                    upsertObs(sc.optString("tech"), plmnNum, sc.optString("band"),
+                        num(sc, "gnb")?.toLong() ?: -1L, num(sc, "pci")?.toLong() ?: -1L, num(sc, "arfcn")?.toLong() ?: -1L,
+                        lat, lon, rsrp, rsrq, sinr, rssi, num(sc, "ta"), tsNow)
+                } catch (_: Exception) {}
+            }
         }
+    }
+
+    private fun upsertObs(
+        tech: String, plmn: String, band: String, gnb: Long, pci: Long, arfcn: Long,
+        lat: Double, lon: Double, rsrp: Double, rsrq: Double?, sinr: Double?, rssi: Double?, ta: Double?, ts: Long
+    ) {
+        val db = writableDatabase
+        val gx = Math.round(lat / GRID_DEG); val gy = Math.round(lon / GRID_DEG)
+        val upd = db.compileStatement(
+            """UPDATE cell_obs SET n=n+1, sumLat=sumLat+?, sumLon=sumLon+?, sumRsrp=sumRsrp+?, maxRsrp=MAX(maxRsrp,?), minRsrp=MIN(minRsrp,?),
+               sumRsrq=sumRsrq+?, nRsrq=nRsrq+?, sumSinr=sumSinr+?, nSinr=nSinr+?, sumRssi=sumRssi+?, nRssi=nRssi+?,
+               sumTa=sumTa+?, nTa=nTa+?, lastTs=?, band=?
+               WHERE tech=? AND plmn=? AND gnb=? AND pci=? AND arfcn=? AND gx=? AND gy=?"""
+        )
+        var i = 1
+        upd.bindDouble(i++, lat); upd.bindDouble(i++, lon); upd.bindDouble(i++, rsrp); upd.bindDouble(i++, rsrp); upd.bindDouble(i++, rsrp)
+        upd.bindDouble(i++, rsrq ?: 0.0); upd.bindLong(i++, if (rsrq != null) 1 else 0)
+        upd.bindDouble(i++, sinr ?: 0.0); upd.bindLong(i++, if (sinr != null) 1 else 0)
+        upd.bindDouble(i++, rssi ?: 0.0); upd.bindLong(i++, if (rssi != null) 1 else 0)
+        upd.bindDouble(i++, ta ?: 0.0); upd.bindLong(i++, if (ta != null) 1 else 0)
+        upd.bindLong(i++, ts); upd.bindString(i++, band)
+        upd.bindString(i++, tech); upd.bindString(i++, plmn); upd.bindLong(i++, gnb); upd.bindLong(i++, pci); upd.bindLong(i++, arfcn)
+        upd.bindLong(i++, gx); upd.bindLong(i++, gy)
+        if (upd.executeUpdateDelete() == 0) {
+            val cv = ContentValues().apply {
+                put("tech", tech); put("plmn", plmn); put("band", band); put("gnb", gnb); put("pci", pci); put("arfcn", arfcn)
+                put("gx", gx); put("gy", gy); put("n", 1); put("sumLat", lat); put("sumLon", lon)
+                put("sumRsrp", rsrp); put("maxRsrp", rsrp); put("minRsrp", rsrp)
+                put("sumRsrq", rsrq ?: 0.0); put("nRsrq", if (rsrq != null) 1 else 0)
+                put("sumSinr", sinr ?: 0.0); put("nSinr", if (sinr != null) 1 else 0)
+                put("sumRssi", rssi ?: 0.0); put("nRssi", if (rssi != null) 1 else 0)
+                put("sumTa", ta ?: 0.0); put("nTa", if (ta != null) 1 else 0)
+                put("firstTs", ts); put("lastTs", ts)
+            }
+            db.insert("cell_obs", null, cv)
+        }
+    }
+
+    /** The permanent observation aggregates (one row per cell per ~22 m place). Rows follow [OBS_COLS]. */
+    fun cellObs(): String {
+        val out = JSONArray()
+        try {
+            readableDatabase.rawQuery("SELECT ${OBS_COLS.joinToString(",")} FROM cell_obs", null)
+                .use { c -> while (c.moveToNext()) out.put(rowToJson(c)) }
+        } catch (_: Exception) {}
+        return out.toString()
     }
 
     private fun rowToJson(c: android.database.Cursor): JSONArray {
