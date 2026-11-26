@@ -29,7 +29,6 @@ import java.io.File
 class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
-    private lateinit var telemetryEngine: ModemTelemetryEngine
     private lateinit var modemController: RealModemController
     private val pollingHandler = Handler(Looper.getMainLooper())
     private val SHIZUKU_CODE = 1001
@@ -124,12 +123,10 @@ class MainActivity : AppCompatActivity() {
         }
         setContentView(webView)
 
-        sampleStore = SampleStore(this)
-        telemetryEngine = ModemTelemetryEngine(this) { jsonPayload ->
-            try { sampleStore.addFromPayload(org.json.JSONObject(jsonPayload), lastLat, lastLon, lastAcc) } catch (_: Exception) {}
-            val jsCall = "if (window.onRealModemData) { window.onRealModemData($jsonPayload); }"
-            webView.evaluateJavascript(jsCall, null)
-        }
+        // The recorder (modem polling + GPS + sample store) lives in RecorderHub / the foreground service.
+        // The activity only listens while it exists, so recording never depends on the UI.
+        RecorderHub.addPayloadListener(uiPayloadListener)
+        RecorderHub.addLocationListener(uiLocationListener)
 
         checkAndRequestPermissions()
         requestShizukuPermissionIfNeeded()
@@ -138,10 +135,27 @@ class MainActivity : AppCompatActivity() {
         startBackgroundMonitorServiceSafely()
     }
 
+    private val uiPayloadListener: (String) -> Unit = { json ->
+        if (::webView.isInitialized) {
+            webView.evaluateJavascript("if (window.onRealModemData) { window.onRealModemData($json); }", null)
+        }
+    }
+
+    private val uiLocationListener: (Double, Double, Float) -> Unit = { lat, lon, acc ->
+        if (::webView.isInitialized) {
+            webView.evaluateJavascript("window.onRealLocation && window.onRealLocation($lat, $lon, $acc)", null)
+        }
+    }
+
     override fun onResume() {
         super.onResume()
         updateShizukuUiState()
         startBackgroundMonitorServiceSafely()
+        RecorderHub.start(this)
+        // everything recorded while we were in the background is in the store: re-sync the UI from it
+        if (::webView.isInitialized) {
+            webView.evaluateJavascript("window.rtResync && window.rtResync()", null)
+        }
     }
 
     private fun requestNotificationPermissionIfNeeded() {
@@ -361,6 +375,7 @@ class MainActivity : AppCompatActivity() {
             runOnUiThread {
                 allowExitApp = true
                 try {
+                    RecorderHub.stop()
                     BackgroundMonitorService.stopService(this@MainActivity)
                 } catch (_: Exception) {
                 }
@@ -510,6 +525,47 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        // ---- background recording status / exemptions ----
+        @JavascriptInterface
+        fun getHoCount(): Long = sampleStore.hoCount()
+
+        @JavascriptInterface
+        fun getBackgroundStatus(): String {
+            val pm = getSystemService(POWER_SERVICE) as android.os.PowerManager
+            val bgLoc = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q ||
+                ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.ACCESS_BACKGROUND_LOCATION) == PackageManager.PERMISSION_GRANTED
+            return org.json.JSONObject()
+                .put("recording", RecorderHub.isRunning())
+                .put("batteryExempt", pm.isIgnoringBatteryOptimizations(packageName))
+                .put("backgroundLocation", bgLoc)
+                .toString()
+        }
+
+        @JavascriptInterface
+        fun requestBatteryExemption() {
+            runOnUiThread {
+                try {
+                    startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")))
+                } catch (_: Exception) {
+                    try { startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) } catch (_: Exception) {}
+                }
+            }
+        }
+
+        @JavascriptInterface
+        fun requestBackgroundLocation() {
+            runOnUiThread {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    Toast.makeText(this@MainActivity, "הרשאות ← מיקום ← \"אפשר תמיד\"", Toast.LENGTH_LONG).show()
+                    try {
+                        startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
+                    } catch (_: Exception) {}
+                } else {
+                    permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_BACKGROUND_LOCATION))
+                }
+            }
+        }
+
         @JavascriptInterface
         fun beep(count: Int) {
             playBeep(count)
@@ -561,55 +617,12 @@ class MainActivity : AppCompatActivity() {
         webView.evaluateJavascript("window.onAirplaneState && window.onAirplaneState($on)", null)
     }
 
-    private lateinit var sampleStore: SampleStore
-    private var lastLat: Double? = null
-    private var lastLon: Double? = null
-    private var lastAcc: Float? = null
-
-    private var locationListener: android.location.LocationListener? = null
-
-    @SuppressLint("MissingPermission")
-    private fun startLocationUpdates() {
-        if (locationListener != null) return
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) return
-        val lm = getSystemService(LOCATION_SERVICE) as android.location.LocationManager
-        val listener = object : android.location.LocationListener {
-            override fun onLocationChanged(loc: android.location.Location) {
-                lastLat = loc.latitude; lastLon = loc.longitude; lastAcc = loc.accuracy
-                webView.evaluateJavascript(
-                    "window.onRealLocation && window.onRealLocation(${loc.latitude}, ${loc.longitude}, ${loc.accuracy})", null
-                )
-            }
-            @Deprecated("Deprecated in Java")
-            override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
-            override fun onProviderEnabled(provider: String) {}
-            override fun onProviderDisabled(provider: String) {}
-        }
-        locationListener = listener
-        try {
-            for (provider in listOf(android.location.LocationManager.GPS_PROVIDER, android.location.LocationManager.NETWORK_PROVIDER)) {
-                if (lm.isProviderEnabled(provider)) {
-                    lm.requestLocationUpdates(provider, 1000L, 0f, listener, android.os.Looper.getMainLooper())
-                    lm.getLastKnownLocation(provider)?.let { listener.onLocationChanged(it) }
-                }
-            }
-        } catch (_: Exception) {
-        }
-    }
+    private val sampleStore: SampleStore get() = RecorderHub.store(applicationContext)
 
     private fun startRealModemStream() {
-        startLocationUpdates()
+        RecorderHub.start(this)
         pushAirplaneState()
-        telemetryEngine.startListening()
-        val pollRunnable = object : Runnable {
-            override fun run() {
-                telemetryEngine.requestFreshAndEmit()
-                pollingHandler.postDelayed(this, 1000)
-            }
-        }
-        pollingHandler.post(pollRunnable)
     }
-
 
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
@@ -641,6 +654,7 @@ class MainActivity : AppCompatActivity() {
         Shizuku.removeBinderReceivedListener(shizukuBinderReceived)
         Shizuku.removeBinderDeadListener(shizukuBinderDead)
         pollingHandler.removeCallbacksAndMessages(null)
-        locationListener?.let { (getSystemService(LOCATION_SERVICE) as android.location.LocationManager).removeUpdates(it) }
+        RecorderHub.removePayloadListener(uiPayloadListener)
+        RecorderHub.removeLocationListener(uiLocationListener)
     }
 }

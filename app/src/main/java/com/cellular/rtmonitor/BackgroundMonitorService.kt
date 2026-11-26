@@ -91,15 +91,24 @@ class BackgroundMonitorService : Service() {
 
         val notification = buildForegroundNotification("ניטור רשת סלולרית פעיל ברקע")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(
-                NOTIFICATION_ID,
-                notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
-            )
+            var type = ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+            // the "location" type is what lets the app keep reading cell info / GPS while in the background
+            if (androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION)
+                == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+            }
+            try {
+                startForeground(NOTIFICATION_ID, notification, type)
+            } catch (e: Exception) {
+                Log.e(TAG, "startForeground with type failed: ${e.message}")
+                startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+            }
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
         Log.i(TAG, "startForeground active with notificationId=$NOTIFICATION_ID")
+
+        RecorderHub.start(this)   // recording runs here, independent of the activity
 
         if (!isMonitoring) {
             isMonitoring = true
@@ -125,6 +134,7 @@ class BackgroundMonitorService : Service() {
     // [START: TelemetryAndNotificationHelpers]
     private fun stopMonitoringAndService() {
         Log.i(TAG, "stopMonitoringAndService: halting loop")
+        RecorderHub.stop()
         isMonitoring = false
         mainHandler.removeCallbacks(monitorRunnable)
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -133,22 +143,11 @@ class BackgroundMonitorService : Service() {
 
     private fun recordTelemetryTick(tick: Long) {
         try {
-            val defaultDataSubId = SubscriptionManager.getDefaultDataSubscriptionId()
-            val networkOperatorName = telephonyManager.networkOperatorName ?: "N/A"
-            val simState = telephonyManager.simState
-            val dataState = telephonyManager.dataState
-            val dataActivity = telephonyManager.dataActivity
-
-            Log.i(
-                TAG,
-                "tick#$tick | subId=$defaultDataSubId | op=$networkOperatorName | simState=$simState | dataState=$dataState | dataActivity=$dataActivity"
-            )
-            updateNotificationText("דגימה #$tick פעילה • רשת: $networkOperatorName")
-        } catch (se: SecurityException) {
-            Log.w(TAG, "tick#$tick | SecurityException reading telephony telemetry: ${se.message}")
-            updateNotificationText("דגימה #$tick פעילה (הרשאות טלפוניה מוגבלות)")
+            val op = telephonyManager.networkOperatorName ?: ""
+            val total = RecorderHub.store(this).total()
+            updateNotificationText("מקליט ברקע • ${"%,d".format(total)} דגימות" + if (op.isNotBlank()) " • $op" else "")
         } catch (e: Exception) {
-            Log.e(TAG, "tick#$tick | Error reading telephony telemetry: ${e.message}", e)
+            Log.e(TAG, "tick#$tick | notification update failed: ${e.message}", e)
         }
     }
 

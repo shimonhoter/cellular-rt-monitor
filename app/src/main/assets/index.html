@@ -302,6 +302,7 @@
                     📂 טען קובץ Log (CSV/JSON)
                     <input type="file" id="log-file-input" accept=".csv,.json,.txt,.log" onchange="handleFileUpload(event)" class="hidden">
                 </label>
+                <button onclick="openBgModal()" id="btn-bg" class="px-2 py-1.5 rounded bg-slate-800 text-emerald-300 text-xs font-bold border border-slate-700" title="הקלטה ברקע">🔋 ברקע</button>
                 <button onclick="clearLogs()" class="px-2 py-1.5 rounded bg-slate-800 text-rose-400 text-xs font-bold">נקה</button>
             </div>
         </div>
@@ -484,6 +485,18 @@
         </div>
     </div>
 
+    <div id="bg-modal" class="hidden fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-emerald-500/40 rounded-xl max-w-md w-full p-4 shadow-2xl">
+            <div class="flex items-center justify-between mb-2">
+                <h3 class="text-sm font-bold text-white">🔋 הקלטה ברקע</h3>
+                <button onclick="closeBgModal()" class="text-slate-400 hover:text-white text-base">✕</button>
+            </div>
+            <p class="text-[11px] text-slate-400 mb-2">ההקלטה רצה בשירות קדמי עם התראה קבועה, גם כשהמסך כבוי או האפליקציה ברקע. כדי שמערכת ההפעלה לא תעצור אותה, מומלץ לאשר את שני הפריטים:</p>
+            <div id="bg-rows" class="space-y-1.5 text-xs mb-3"></div>
+            <button onclick="closeBgModal()" class="w-full py-1.5 px-3 bg-slate-800 text-slate-300 rounded-lg text-xs">סגור</button>
+        </div>
+    </div>
+
     <div id="device-modal" class="hidden fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4">
         <div class="bg-slate-900 border border-slate-700 rounded-xl max-w-md w-full p-4 shadow-2xl">
             <div class="flex items-center justify-between mb-2">
@@ -562,6 +575,28 @@
             container.appendChild(toast);
             setTimeout(() => toast.remove(), 3500);
         }
+
+        function bgStatus() {
+            try { return JSON.parse(window.AndroidModem.getBackgroundStatus()); } catch (_e) { return null; }
+        }
+        function renderBg() {
+            const st = bgStatus(), rows = document.getElementById('bg-rows');
+            if (!st) { rows.innerHTML = '<div class="text-slate-400">זמין רק בתוך האפליקציה.</div>'; return; }
+            const row = (ok, title, desc, fn) => `<div class="flex items-center justify-between gap-2 bg-slate-950 border border-slate-800 rounded-lg p-2">
+                <div><div class="font-bold ${ok ? 'text-emerald-300' : 'text-amber-300'}">${ok ? '✅' : '⚠️'} ${title}</div><div class="text-[10px] text-slate-400">${desc}</div></div>
+                ${ok ? '' : `<button onclick="${fn}" class="px-2 py-1 rounded bg-cyan-600 text-white text-[11px] font-bold shrink-0">אשר</button>`}</div>`;
+            rows.innerHTML =
+                row(st.recording, 'ההקלטה פעילה', 'שירות הקלטה רץ ושומר דגימות', '') +
+                row(st.batteryExempt, 'פטור מחיסכון בסוללה', 'מונע מהמערכת להשהות את ההקלטה', 'AndroidModem.requestBatteryExemption()') +
+                row(st.backgroundLocation, 'מיקום "תמיד"', 'נדרש כדי לקבל GPS ונתוני תאים כשהמסך כבוי', 'AndroidModem.requestBackgroundLocation()');
+            const ok = st.recording && st.batteryExempt && st.backgroundLocation;
+            const b = document.getElementById('btn-bg');
+            if (b) b.textContent = ok ? '🔋 ברקע' : '🔋 ברקע ⚠️';
+        }
+        function openBgModal() { renderBg(); document.getElementById('bg-modal').classList.remove('hidden'); }
+        function closeBgModal() { document.getElementById('bg-modal').classList.add('hidden'); }
+        document.addEventListener('visibilitychange', () => { if (!document.hidden && !document.getElementById('bg-modal').classList.contains('hidden')) renderBg(); });
+        setInterval(() => { if (window.AndroidModem && window.AndroidModem.getBackgroundStatus && !document.hidden) renderBg(); }, 5000);
 
         function openShizukuModal() { document.getElementById('shizuku-guide-modal').classList.remove('hidden'); }
         function closeShizukuModal() { document.getElementById('shizuku-guide-modal').classList.add('hidden'); }
@@ -836,6 +871,7 @@
 
         /* ---- RF stream: newest first, older pages loaded on scroll, new rows prepended every second ---- */
         const rfv = { newest: 0, oldest: 0, loading: false, done: false, bound: false };
+        window.rfv = rfv;
         const RF_PAGE = 200;
         function rfStreamReset(container) {
             rfv.newest = 0; rfv.oldest = 0; rfv.done = false; rfv.loading = false;
@@ -1877,6 +1913,34 @@ if (window.__rtStableV41) return;
     } catch (e) { return false; }
   };
 
+  // Rebuild counters + the live chart window from the store (which keeps recording in the background)
+  function seedFromStore(force) {
+    var st = window.state;
+    st.sampleCount = RfStore.count();
+    try { var b = bridge(); if (b && b.getHoCount) st.hoCount = Math.max(st.hoCount || 0, Number(b.getHoCount())); } catch (e) {}
+    var recent = RfStore.page(0, 500).reverse();
+    if (recent.length && (force || !st.liveSamples.length)) {
+      st.liveSamples = recent.map(function (r) {
+        var o = RfStore.obj(r);
+        return { timestamp: new Date(o.ts).toISOString(), rat: o.rat, tech: o.tech, band: o.band, plmn: o.plmn,
+          cell_id: o.pci, gnb: o.gnb, arfcn: o.arfcn, tac: o.tac, rsrp: o.rsrp, rsrq: o.rsrq, sinr: o.sinr, rssi: o.rssi, tx_power: o.tx };
+      });
+      st.history = recent.slice(-90).map(function (r) { return { rsrp: r[14], rssi: r[17], sinr: r[16], ts: r[1] }; });
+    }
+  }
+
+  // called by the native side when the app returns to the foreground
+  window.rtResync = function () {
+    try {
+      seedFromStore(true);
+      if (window.rfv) { window.rfv.newest = 0; window.rfv.oldest = 0; window.rfv.done = false; }
+      var v = document.getElementById("view-logs");
+      if (v && !v.classList.contains("hidden")) renderLogs();
+      if (typeof updateLiveUI === "function") updateLiveUI();
+      if (typeof drawLiveChartOnce === "function") drawLiveChartOnce();
+    } catch (e) {}
+  };
+
   function restore() {
     try {
       var st = window.state;
@@ -1890,17 +1954,7 @@ if (window.__rtStableV41) return;
           st.hoCount = Math.max(st.hoCount || 0, d.hoCount || 0);
         }
       }
-      // load everything that already exists: total count + recent samples for the live chart
-      st.sampleCount = RfStore.count();
-      var recent = RfStore.page(0, 500).reverse();
-      if (recent.length && !st.liveSamples.length) {
-        st.liveSamples = recent.map(function (r) {
-          var o = RfStore.obj(r);
-          return { timestamp: new Date(o.ts).toISOString(), rat: o.rat, tech: o.tech, band: o.band, plmn: o.plmn,
-            cell_id: o.pci, gnb: o.gnb, arfcn: o.arfcn, tac: o.tac, rsrp: o.rsrp, rsrq: o.rsrq, sinr: o.sinr, rssi: o.rssi, tx_power: o.tx };
-        });
-        st.history = recent.slice(-90).map(function (r) { return { rsrp: r[14], rssi: r[17], sinr: r[16], ts: r[1] }; });
-      }
+      seedFromStore(false);
       renderLogs();
       if (typeof updateLiveUI === "function") updateLiveUI();
     } catch (e) {}

@@ -58,6 +58,10 @@ class SampleStore(context: Context) :
         readableDatabase.rawQuery("SELECT COUNT(*) FROM samples", null).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
     } catch (_: Exception) { 0L }
 
+    fun hoCount(): Long = try {
+        readableDatabase.rawQuery("SELECT COUNT(*) FROM samples WHERE ho=1", null).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
+    } catch (_: Exception) { 0L }
+
     fun total(): Long {
         val v = count.get()
         return if (v >= 0) v else queryCount().also { count.set(it) }
