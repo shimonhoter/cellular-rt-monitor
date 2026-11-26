@@ -69,13 +69,13 @@ class SampleStore(context: Context) :
         return if (d.isNaN() || d >= 2147483647.0) null else d
     }
 
-    /** Stores one sample from a telemetry payload. Skips payloads that carry no signal values, and throttles to ~1 Hz. */
+    /** Stores one sample from a telemetry payload. Throttles to ~1 Hz. */
     fun addFromPayload(payload: JSONObject, lat: Double?, lon: Double?, acc: Float?) {
         val now = System.currentTimeMillis()
         if (now - lastInsertTs < MIN_INTERVAL_MS) return
-        val sc = payload.optJSONObject("servingCell") ?: return
+        // Every read is stored exactly as the modem reported it; missing fields stay empty (NULL), nothing is filled in.
+        val sc = payload.optJSONObject("servingCell") ?: JSONObject()
         val rsrp = num(sc, "rsrp"); val rsrq = num(sc, "rsrq"); val sinr = num(sc, "sinr"); val rssi = num(sc, "rssi")
-        if (rsrp == null && rsrq == null && sinr == null && rssi == null) return
         lastInsertTs = now
         val ho = sc.optBoolean("handoverOccurred", false)
         val nb = payload.optJSONArray("neighbors")?.length() ?: 0

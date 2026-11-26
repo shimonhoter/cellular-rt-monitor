@@ -263,19 +263,19 @@ class ModemTelemetryEngine(
                     "5G NR"
                 }
 
-                val rawNrSinr = when {
+                val rawNrSinr: Int? = when {
                     isValidSinr(sig.ssSinr) -> sig.ssSinr
                     Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && isValidSinr(sig.csiSinr) -> sig.csiSinr
-                    else -> fallbackSinrFromSignalStrength(preferNr = true)
+                    else -> null   // not reported in this read: leave empty
                 }
 
                 obj.put("rat", "5G")
                 obj.put("tech", "5G NR")
                 obj.put("band", bands)
-                obj.put("pci", id.pci)
-                obj.put("gnb", id.nci shr 14)
-                obj.put("arfcn", id.nrarfcn)
-                obj.put("tac", id.tac)
+                obj.putReported("pci", id.pci)
+                if (id.nci != CellInfo.UNAVAILABLE_LONG) obj.put("gnb", id.nci shr 14) else obj.put("gnb", JSONObject.NULL)
+                obj.putReported("arfcn", id.nrarfcn)
+                obj.putReported("tac", id.tac)
                 obj.putReported("rsrp", sig.ssRsrp)
                 obj.putReported("rsrq", sig.ssRsrq)
                 if (rawNrSinr != null) {
@@ -295,28 +295,24 @@ class ModemTelemetryEngine(
                     "LTE"
                 }
 
-                val resolvedSinr = when {
-                    isValidSinr(sig.rssnr) -> sig.rssnr
-                    else -> fallbackSinrFromSignalStrength(preferNr = false)
-                }
+                val resolvedSinr: Int? = if (isValidSinr(sig.rssnr)) sig.rssnr else null   // empty if not reported
 
                 obj.put("rat", "4G")
                 obj.put("tech", "4G LTE")
                 obj.put("band", bands)
-                obj.put("pci", id.pci)
-                obj.put("gnb", id.ci shr 8)
-                obj.put("arfcn", id.earfcn)
-                obj.put("tac", id.tac)
-                val live = if (info.isRegistered && !validDbm(sig.rsrp)) liveLte() else null
-                obj.putReported("rsrp", if (live != null) live.rsrp else sig.rsrp)
-                obj.putReported("rsrq", if (live != null && !validDbm(sig.rsrq)) live.rsrq else sig.rsrq)
+                obj.putReported("pci", id.pci)
+                if (id.ci != CellInfo.UNAVAILABLE) obj.put("gnb", id.ci shr 8) else obj.put("gnb", JSONObject.NULL)
+                obj.putReported("arfcn", id.earfcn)
+                obj.putReported("tac", id.tac)
+                obj.putReported("rsrp", sig.rsrp)
+                obj.putReported("rsrq", sig.rsrq)
                 if (resolvedSinr != null) {
                     obj.put("sinr", resolvedSinr)
                 } else {
                     obj.put("sinr", JSONObject.NULL)
                 }
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) obj.putReported("rssi", sig.rssi) else obj.put("rssi", JSONObject.NULL)
-                obj.put("ta", if (sig.timingAdvance != CellInfo.UNAVAILABLE) sig.timingAdvance else 0)
+                obj.putReported("ta", sig.timingAdvance)
             }
 
             info is CellInfoWcdma -> {
@@ -325,10 +321,10 @@ class ModemTelemetryEngine(
                 obj.put("rat", "3G")
                 obj.put("tech", "3G UMTS")
                 obj.put("band", "U2100 / U900")
-                obj.put("pci", id.psc)
-                obj.put("gnb", id.cid)
-                obj.put("arfcn", id.uarfcn)
-                obj.put("tac", id.lac)
+                obj.putReported("pci", id.psc)
+                obj.putReported("gnb", id.cid)
+                obj.putReported("arfcn", id.uarfcn)
+                obj.putReported("tac", id.lac)
                 obj.putReported("rsrp", sig.dbm)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) obj.putReported("rsrq", sig.ecNo) else obj.put("rsrq", JSONObject.NULL)
                 obj.put("sinr", JSONObject.NULL)
@@ -341,10 +337,10 @@ class ModemTelemetryEngine(
                 obj.put("rat", "2G")
                 obj.put("tech", "2G GSM")
                 obj.put("band", "GSM 900/1800")
-                obj.put("pci", id.bsic)
-                obj.put("gnb", id.cid)
-                obj.put("arfcn", id.arfcn)
-                obj.put("tac", id.lac)
+                obj.putReported("pci", id.bsic)
+                obj.putReported("gnb", id.cid)
+                obj.putReported("arfcn", id.arfcn)
+                obj.putReported("tac", id.lac)
                 obj.putReported("rsrp", sig.dbm)
                 obj.put("rsrq", JSONObject.NULL)
                 obj.putReported("ber", sig.bitErrorRate)
