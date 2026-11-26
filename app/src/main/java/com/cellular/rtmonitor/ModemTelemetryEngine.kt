@@ -43,27 +43,21 @@ class ModemTelemetryEngine(
             val callback = object : TelephonyCallback(),
                 TelephonyCallback.SignalStrengthsListener,
                 TelephonyCallback.CellInfoListener {
-                override fun onSignalStrengthsChanged(signalStrength: SignalStrength) {
-                    collectAndEmitTelemetry()
-                }
+                // Change notifications are intentionally NOT emitted: they can carry partial/cached lists.
+                // The 1 Hz poll (requestFreshAndEmit) is the single source of reads.
+                override fun onSignalStrengthsChanged(signalStrength: SignalStrength) {}
 
-                override fun onCellInfoChanged(cellInfo: MutableList<CellInfo>) {
-                    collectAndEmitTelemetry(cellInfo)
-                }
+                override fun onCellInfoChanged(cellInfo: MutableList<CellInfo>) {}
             }
             telephonyManager.registerTelephonyCallback(executor, callback)
         } else {
             @Suppress("DEPRECATION")
             val legacyListener = object : PhoneStateListener() {
                 @Deprecated("Deprecated in Java")
-                override fun onSignalStrengthsChanged(signalStrength: SignalStrength?) {
-                    collectAndEmitTelemetry()
-                }
+                override fun onSignalStrengthsChanged(signalStrength: SignalStrength?) {}
 
                 @Deprecated("Deprecated in Java")
-                override fun onCellInfoChanged(cellInfo: MutableList<CellInfo>?) {
-                    collectAndEmitTelemetry(cellInfo)
-                }
+                override fun onCellInfoChanged(cellInfo: MutableList<CellInfo>?) {}
             }
             @Suppress("DEPRECATION")
             telephonyManager.listen(
